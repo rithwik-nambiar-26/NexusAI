@@ -1,0 +1,73 @@
+# NexusAI — gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment / secrets (never commit)
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.secret
+secrets/
+credentials/
+config.local.py
+
+# Experiment data (local-only; may contain tool outputs or user-provided content)
+experiments/
+.runs/
+
+# Logs
+*.log
+logs/
+
+# Temporary / scratch
+scratch/
+.tmp/
+*.tmp
+
+# macOS / Windows
+.Spotlight-V100
+.Trashes
+$RECYCLE.BIN/
+
+# Bytecode / compiled
+*.pyc
