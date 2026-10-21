@@ -204,11 +204,17 @@ class IntentClassifier:
         true_labels = self.label_encoder.transform(val_labels)
         correct = preds == true_labels
 
-        # Try thresholds from 0.3 to 0.9
+        # Try thresholds from minimum observed max probability to 0.9
+        # (previously started at 0.30, but model max prob can be lower)
+        min_threshold = float(max(0.0, max_probas.min() - 0.01))
+        max_threshold = min(0.90, max_probas.max() + 0.01)
+        if max_threshold <= min_threshold:
+            max_threshold = min_threshold + 0.05
+
         best_threshold = self.confidence_threshold
         best_score = 0.0
 
-        for threshold in np.arange(0.30, 0.90, 0.05):
+        for threshold in np.arange(min_threshold, max_threshold, 0.05):
             confident = max_probas >= threshold
             if confident.sum() == 0:
                 continue
@@ -223,9 +229,11 @@ class IntentClassifier:
                 best_threshold = threshold
 
         self.confidence_threshold = float(best_threshold)
+        # Set clarification threshold to half of confidence threshold (rounded to 2 decimals)
+        self.clarification_threshold = round(self.confidence_threshold * 0.5, 2)
         logger.info(
             "Confidence threshold tuned",
-            extra={"threshold": self.confidence_threshold, "score": best_score},
+            extra={"threshold": self.confidence_threshold, "clarification_threshold": self.clarification_threshold, "score": best_score},
         )
 
     def predict(self, request: IntentClassificationRequest) -> IntentClassificationResult:
