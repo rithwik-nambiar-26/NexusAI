@@ -1,0 +1,18 @@
+{
+  "classes": [
+    "communication",
+    "data_analysis",
+    "destructive_operation",
+    "document_operation",
+    "document_question_answering",
+    "document_summarisation",
+    "infeasible",
+    "invalid",
+    "out_of_scope",
+    "research"
+  ],
+  "n_classes": 10,
+  "confidence_threshold": 0.55,
+  "clarification_threshold": 0.35,
+  "sklearn_version": "1.9.0"
+}

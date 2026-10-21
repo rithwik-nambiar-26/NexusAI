@@ -1,0 +1,197 @@
+[
+  {
+    "text":"   ",
+    "intent":"invalid",
+    "source":"scenario"
+  },
+  {
+    "text":"Summarise data\/sample\/product_manual.md and save the summary to notes\/summary.md.",
+    "intent":"document_summarisation",
+    "source":"scenario"
+  },
+  {
+    "text":"asdfghjkl",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"Look up the warranty exclusions in data\/sample\/product_manual.md and list them.",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Show me the top 5 products by units sold.",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
+    "text":"Remove all temporary files from the cache directory.",
+    "intent":"destructive_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Delete every file in the notes\/ directory.",
+    "intent":"destructive_operation",
+    "source":"scenario"
+  },
+  {
+    "text":"Build a time machine and go back to 1990.",
+    "intent":"infeasible",
+    "source":"synthetic"
+  },
+  {
+    "text":"Open the file data\/sample\/sales_2026.csv and report the total revenue for the 'Northern' region.",
+    "intent":"data_analysis",
+    "source":"scenario"
+  },
+  {
+    "text":"Extract all dates from the contract document.",
+    "intent":"document_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Find the installation instructions in the manual.",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"According to the meeting notes, who was assigned the budget review task?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Give me a summary of the meeting notes.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Analyse the risk factors in my company's Q3 financial statements and tell me which disclosures I should make to regulators.",
+    "intent":"out_of_scope",
+    "source":"scenario"
+  },
+  {
+    "text":"Write a message to the team about the deadline change.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"?!@#$%^&*()",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"Compare cloud storage options for personal backup.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"What warranty exclusions are listed in data\/sample\/product_manual.md?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Calculate the total revenue for Q1 from the sales CSV.",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
+    "text":"Fetch the contents of data\/sample\/product_manual.md and list its section headings.",
+    "intent":"document_operation",
+    "source":"scenario"
+  },
+  {
+    "text":"Look up the latest LLM benchmarks and summarise the results.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"Convert the meeting notes to a PDF.",
+    "intent":"document_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"According to data\/sample\/product_manual.md, what is the warranty period and what does it exclude?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Send a WhatsApp message to my mother saying I will be late for dinner.",
+    "intent":"communication",
+    "source":"scenario"
+  },
+  {
+    "text":"Research three open-source text-to-speech tools, compare their licence and language support, and write a one-paragraph recommendation for a student project.",
+    "intent":"research",
+    "source":"scenario"
+  },
+  {
+    "text":"",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"What medical treatment should I take for this condition?",
+    "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Read data\/sample\/product_manual.md and summarise it in three bullet points.",
+    "intent":"document_summarisation",
+    "source":"scenario"
+  },
+  {
+    "text":"File my taxes for me.",
+    "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Search the document for mentions of 'warranty'.",
+    "intent":"document_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Book a flight to Mars for next Tuesday and reserve a hotel near the launch pad.",
+    "intent":"infeasible",
+    "source":"scenario"
+  },
+  {
+    "text":"Write a two-sentence summary of the contract.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Draft an email to the study group summarising data\/sample\/meeting_notes.md, then send it to study-group@example.com.",
+    "intent":"communication",
+    "source":"scenario"
+  },
+  {
+    "text":"Show me the safety warnings in the product documentation.",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Which region had the highest profit margin?",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
+    "text":"What does the product manual say about the return policy?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Using data\/sample\/sales_2026.csv, identify the top three regions by total revenue and state which region had the highest growth.",
+    "intent":"data_analysis",
+    "source":"scenario"
+  },
+  {
+    "text":"Find and compare three project management tools for a small team.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"Send an email to john@example.com with the meeting summary.",
+    "intent":"communication",
+    "source":"synthetic"
+  }
+]

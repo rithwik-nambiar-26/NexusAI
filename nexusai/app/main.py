@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
 from nexusai.app.api.routes.health import router as health_router
+from nexusai.app.api.routes.intent import router as intent_router
 from nexusai.app.api.routes.system import router as system_router
 from nexusai.app.api.routes.workflows import router as workflows_router
 from nexusai.app.config import Settings, get_settings
@@ -71,6 +72,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {"name": "health", "description": "Liveness and readiness probes."},
             {"name": "system", "description": "Configuration and service availability."},
             {"name": "workflows", "description": "Workflow run persistence."},
+            {"name": "intent", "description": "Intent classification for user requests."},
         ],
     )
 
@@ -97,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(system_router)
     app.include_router(workflows_router)
+    app.include_router(intent_router)
 
     return app
 
