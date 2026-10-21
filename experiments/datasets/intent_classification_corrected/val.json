@@ -1,0 +1,57 @@
+[
+  {
+    "text":"Research three open-source text-to-speech tools, compare their licence and language support, and write a one-paragraph recommendation for a student project.",
+    "intent":"research",
+    "source":"scenario"
+  },
+  {
+    "text":"",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"What warranty exclusions are listed in data\/sample\/product_manual.md?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Analyse the risk factors in my company's Q3 financial statements and tell me which disclosures I should make to regulators.",
+    "intent":"out_of_scope",
+    "source":"scenario"
+  },
+  {
+    "text":"Using data\/sample\/sales_2026.csv, identify the top three regions by total revenue and state which region had the highest growth.",
+    "intent":"data_analysis",
+    "source":"scenario"
+  },
+  {
+    "text":"Convert the meeting notes to a PDF.",
+    "intent":"document_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Write a message to the team about the deadline change.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"According to the meeting notes, who was assigned the budget review task?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Remove all temporary files from the cache directory.",
+    "intent":"destructive_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Book a flight to Mars for next Tuesday and reserve a hotel near the launch pad.",
+    "intent":"infeasible",
+    "source":"scenario"
+  },
+  {
+    "text":"Write a two-sentence summary of the contract.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  }
+]

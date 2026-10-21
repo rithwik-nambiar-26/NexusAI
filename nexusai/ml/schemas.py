@@ -11,21 +11,32 @@ from pydantic import BaseModel, Field
 class IntentCategory(str, Enum):
     """Supported intent categories for NexusAI workflow routing.
 
-    Taxonomy derived from the 18 evaluation scenarios (SC-01 through SC-18).
-    Categories are consolidated from fine-grained scenario intents into
-    actionable workflow-routing classes.
+    Taxonomy derived from the 18 evaluation scenarios (SC-01 through SC-18)
+    and expanded with synthetic variations. Categories are consolidated from
+    fine-grained scenario intents into actionable workflow-routing classes.
+
+    Design principles:
+    - Each category maps to a distinct workflow pattern
+    - Special categories (INVALID, INFEASIBLE, OUT_OF_SCOPE, DESTRUCTIVE_OPERATION)
+      require special handling and never trigger automatic workflow execution
+    - Supported categories map to concrete workflow patterns with registered tools
     """
 
+    # Supported workflow categories (map to executable workflows)
     DOCUMENT_QUESTION_ANSWERING = "document_question_answering"
     DOCUMENT_SUMMARISATION = "document_summarisation"
     DATA_ANALYSIS = "data_analysis"
     RESEARCH = "research"
     COMMUNICATION = "communication"
-    DOCUMENT_OPERATION = "document_operation"
+    DOCUMENT_EXTRACTION = "document_extraction"
+    DOCUMENT_TRANSFORMATION = "document_transformation"
+
+    # Special handling categories (require human approval or refusal)
     DESTRUCTIVE_OPERATION = "destructive_operation"
     INVALID = "invalid"
     INFEASIBLE = "infeasible"
     OUT_OF_SCOPE = "out_of_scope"
+    CHANNEL_UNAVAILABLE = "channel_unavailable"
 
     @classmethod
     def supported(cls) -> list[IntentCategory]:
@@ -36,7 +47,8 @@ class IntentCategory(str, Enum):
             cls.DATA_ANALYSIS,
             cls.RESEARCH,
             cls.COMMUNICATION,
-            cls.DOCUMENT_OPERATION,
+            cls.DOCUMENT_EXTRACTION,
+            cls.DOCUMENT_TRANSFORMATION,
         ]
 
     @classmethod
@@ -47,6 +59,14 @@ class IntentCategory(str, Enum):
             cls.INVALID,
             cls.INFEASIBLE,
             cls.OUT_OF_SCOPE,
+            cls.CHANNEL_UNAVAILABLE,
+        ]
+
+    @classmethod
+    def requires_approval(cls) -> list[IntentCategory]:
+        """Return intents that require explicit user approval before execution."""
+        return [
+            cls.DESTRUCTIVE_OPERATION,
         ]
 
 
@@ -97,3 +117,9 @@ class IntentClassificationResult(BaseModel):
         if self.predicted_intent is None:
             return True
         return self.predicted_intent in IntentCategory.special()
+
+    def requires_approval(self) -> bool:
+        """Return True if the intent requires explicit user approval before execution."""
+        if self.predicted_intent is None:
+            return True
+        return self.predicted_intent in IntentCategory.requires_approval()

@@ -1,58 +1,18 @@
 [
   {
-    "text":"Delete the old backup files.",
-    "intent":"destructive_operation",
-    "source":"synthetic"
-  },
-  {
-    "text":"Create a brief overview of the sales data.",
-    "intent":"document_summarisation",
-    "source":"synthetic"
-  },
-  {
-    "text":"List all tables in the product manual.",
-    "intent":"document_operation",
-    "source":"synthetic"
-  },
-  {
-    "text":"Research the best Python web frameworks for a REST API.",
+    "text":"Find and compare three project management tools for a small team.",
     "intent":"research",
     "source":"synthetic"
   },
   {
-    "text":"Email the client the project update.",
-    "intent":"communication",
-    "source":"synthetic"
-  },
-  {
-    "text":"Deal with the report.",
-    "intent":"invalid",
-    "source":"scenario"
-  },
-  {
-    "text":"What are the termination conditions in our supplier contract, and what notice period applies?",
-    "intent":"document_question_answering",
-    "source":"scenario"
-  },
-  {
-    "text":"What are the key decisions from yesterday's meeting?",
-    "intent":"document_question_answering",
-    "source":"synthetic"
-  },
-  {
-    "text":"Summarise the product manual in one paragraph.",
+    "text":"Summarise data\/sample\/product_manual.md and save the summary to notes\/summary.md.",
     "intent":"document_summarisation",
-    "source":"synthetic"
+    "source":"scenario"
   },
   {
     "text":"Read data\/sample\/meeting_notes.md, extract every action item with an owner, write them to notes\/action_items.md.",
-    "intent":"document_operation",
+    "intent":"document_transformation",
     "source":"scenario"
-  },
-  {
-    "text":"Predict next week's lottery numbers.",
-    "intent":"infeasible",
-    "source":"synthetic"
   },
   {
     "text":"What is the average revenue per region in the sales data?",
@@ -60,8 +20,58 @@
     "source":"synthetic"
   },
   {
+    "text":"Compare monthly sales trends across all regions.",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
+    "text":"Purge all logs older than 30 days.",
+    "intent":"destructive_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Extract all email addresses from the contact list.",
+    "intent":"document_extraction",
+    "source":"synthetic"
+  },
+  {
+    "text":"   \t\n  ",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
     "text":"Give me legal advice on my divorce.",
     "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Send a WhatsApp message to my mother saying I will be late for dinner.",
+    "intent":"channel_unavailable",
+    "source":"scenario"
+  },
+  {
+    "text":"Write a message to the team about the deadline change.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"What are the termination conditions in our supplier contract, and what notice period applies?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Summarise the product manual in one paragraph.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"What does the product manual say about the return policy?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Predict next week's lottery numbers.",
+    "intent":"infeasible",
     "source":"synthetic"
   }
 ]

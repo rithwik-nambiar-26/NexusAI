@@ -1,0 +1,77 @@
+[
+  {
+    "text":"Look up the warranty exclusions in data\/sample\/product_manual.md and list them.",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Open the file data\/sample\/sales_2026.csv and report the total revenue for the 'Northern' region.",
+    "intent":"data_analysis",
+    "source":"scenario"
+  },
+  {
+    "text":"Transform the markdown notes into a structured task list.",
+    "intent":"document_transformation",
+    "source":"synthetic"
+  },
+  {
+    "text":"What are the system requirements listed in the documentation?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Delete every file in the notes\/ directory.",
+    "intent":"destructive_operation",
+    "source":"scenario"
+  },
+  {
+    "text":"Fetch the contents of data\/sample\/product_manual.md and list its section headings.",
+    "intent":"document_extraction",
+    "source":"scenario"
+  },
+  {
+    "text":"Write a two-sentence summary of the contract.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Book a flight to Mars for next Tuesday and reserve a hotel near the launch pad.",
+    "intent":"infeasible",
+    "source":"scenario"
+  },
+  {
+    "text":"What warranty exclusions are listed in data\/sample\/product_manual.md?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"xyz random gibberish",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"Send an email to john@example.com with the meeting summary.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"Read data\/sample\/product_manual.md and summarise it in three bullet points.",
+    "intent":"document_summarisation",
+    "source":"scenario"
+  },
+  {
+    "text":"File my taxes for me.",
+    "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Look up the latest LLM benchmarks and summarise the results.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"?!@#$%^&*()",
+    "intent":"invalid",
+    "source":"synthetic"
+  }
+]

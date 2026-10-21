@@ -51,17 +51,17 @@
   },
   {
     "text":"Send a WhatsApp message to my mother saying I will be late for dinner.",
-    "intent":"communication",
+    "intent":"channel_unavailable",
     "source":"scenario"
   },
   {
     "text":"Fetch the contents of data\/sample\/product_manual.md and list its section headings.",
-    "intent":"document_operation",
+    "intent":"document_extraction",
     "source":"scenario"
   },
   {
     "text":"Read data\/sample\/meeting_notes.md, extract every action item with an owner, write them to notes\/action_items.md.",
-    "intent":"document_operation",
+    "intent":"document_transformation",
     "source":"scenario"
   },
   {
@@ -90,6 +90,11 @@
     "source":"scenario"
   },
   {
+    "text":"Read data\/sample\/meeting_notes.md, extract every action item with an owner, write them to notes\/action_items.md, and then summarise that list into a single sentence.",
+    "intent":"document_transformation",
+    "source":"scenario"
+  },
+  {
     "text":"What does the product manual say about the return policy?",
     "intent":"document_question_answering",
     "source":"synthetic"
@@ -115,6 +120,21 @@
     "source":"synthetic"
   },
   {
+    "text":"What is the maintenance schedule in the equipment manual?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"Find the troubleshooting section for error code E-42 in the manual.",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"What are the system requirements listed in the documentation?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
     "text":"Give me a summary of the meeting notes.",
     "intent":"document_summarisation",
     "source":"synthetic"
@@ -131,6 +151,16 @@
   },
   {
     "text":"Write a two-sentence summary of the contract.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Summarise the key findings from the quarterly report.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Provide a three-bullet summary of the project proposal.",
     "intent":"document_summarisation",
     "source":"synthetic"
   },
@@ -155,6 +185,16 @@
     "source":"synthetic"
   },
   {
+    "text":"Compare monthly sales trends across all regions.",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
+    "text":"Find the month with the highest sales growth rate.",
+    "intent":"data_analysis",
+    "source":"synthetic"
+  },
+  {
     "text":"Find and compare three project management tools for a small team.",
     "intent":"research",
     "source":"synthetic"
@@ -175,6 +215,16 @@
     "source":"synthetic"
   },
   {
+    "text":"Find and compare password managers for team use.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"Research open-source alternatives to Adobe Creative Suite.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
     "text":"Send an email to john@example.com with the meeting summary.",
     "intent":"communication",
     "source":"synthetic"
@@ -190,23 +240,53 @@
     "source":"synthetic"
   },
   {
-    "text":"Extract all dates from the contract document.",
-    "intent":"document_operation",
+    "text":"Send a Slack message to the dev channel with the deployment status.",
+    "intent":"communication",
     "source":"synthetic"
   },
   {
-    "text":"Convert the meeting notes to a PDF.",
-    "intent":"document_operation",
+    "text":"Draft a reply to the client's inquiry about pricing.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"Extract all dates from the contract document.",
+    "intent":"document_extraction",
     "source":"synthetic"
   },
   {
     "text":"List all tables in the product manual.",
-    "intent":"document_operation",
+    "intent":"document_extraction",
     "source":"synthetic"
   },
   {
     "text":"Search the document for mentions of 'warranty'.",
-    "intent":"document_operation",
+    "intent":"document_extraction",
+    "source":"synthetic"
+  },
+  {
+    "text":"Extract all email addresses from the contact list.",
+    "intent":"document_extraction",
+    "source":"synthetic"
+  },
+  {
+    "text":"Find all references to the compliance section in the policy document.",
+    "intent":"document_extraction",
+    "source":"synthetic"
+  },
+  {
+    "text":"Convert the meeting notes to a PDF.",
+    "intent":"document_transformation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Convert the CSV data to JSON format.",
+    "intent":"document_transformation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Transform the markdown notes into a structured task list.",
+    "intent":"document_transformation",
     "source":"synthetic"
   },
   {
@@ -216,6 +296,11 @@
   },
   {
     "text":"Delete the old backup files.",
+    "intent":"destructive_operation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Purge all logs older than 30 days.",
     "intent":"destructive_operation",
     "source":"synthetic"
   },
@@ -235,12 +320,27 @@
     "source":"synthetic"
   },
   {
+    "text":"xyz random gibberish",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
+    "text":"   \t\n  ",
+    "intent":"invalid",
+    "source":"synthetic"
+  },
+  {
     "text":"Build a time machine and go back to 1990.",
     "intent":"infeasible",
     "source":"synthetic"
   },
   {
     "text":"Predict next week's lottery numbers.",
+    "intent":"infeasible",
+    "source":"synthetic"
+  },
+  {
+    "text":"Make me a millionaire overnight.",
     "intent":"infeasible",
     "source":"synthetic"
   },
@@ -257,6 +357,21 @@
   {
     "text":"File my taxes for me.",
     "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Write a legally binding contract for me.",
+    "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"Send a Telegram message to my boss saying I'm running late.",
+    "intent":"channel_unavailable",
+    "source":"synthetic"
+  },
+  {
+    "text":"Post this update to our Discord announcements channel.",
+    "intent":"channel_unavailable",
     "source":"synthetic"
   }
 ]

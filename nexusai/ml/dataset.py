@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from nexusai.ml.schemas import IntentCategory
+
 
 # ---------------------------------------------------------------------------
 # Base examples from the 18 evaluation scenarios
@@ -85,19 +87,21 @@ SCENARIO_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
     ),
     (
         "Send a WhatsApp message to my mother saying I will be late for dinner.",
-        IntentCategory.COMMUNICATION,
+        IntentCategory.CHANNEL_UNAVAILABLE,
         "scenario",
     ),
 
-    # DOCUMENT_OPERATION (3 scenarios: SC-09, SC-13, SC-16)
+    # DOCUMENT_EXTRACTION (1 scenario: SC-09)
     (
         "Fetch the contents of data/sample/product_manual.md and list its section headings.",
-        IntentCategory.DOCUMENT_OPERATION,
+        IntentCategory.DOCUMENT_EXTRACTION,
         "scenario",
     ),
+
+    # DOCUMENT_TRANSFORMATION (1 scenario: SC-13, SC-16)
     (
         "Read data/sample/meeting_notes.md, extract every action item with an owner, write them to notes/action_items.md.",
-        IntentCategory.DOCUMENT_OPERATION,
+        IntentCategory.DOCUMENT_TRANSFORMATION,
         "scenario",
     ),
 
@@ -129,10 +133,17 @@ SCENARIO_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         "scenario",
     ),
 
-    # AMBIGUOUS (1 scenario: SC-14)
+    # INVALID (1 scenario: SC-14)
     (
         "Deal with the report.",
-        IntentCategory.INVALID,  # Treated as invalid/ambiguous
+        IntentCategory.INVALID,
+        "scenario",
+    ),
+
+    # DOCUMENT_TRANSFORMATION (1 scenario: SC-16)
+    (
+        "Read data/sample/meeting_notes.md, extract every action item with an owner, write them to notes/action_items.md, and then summarise that list into a single sentence.",
+        IntentCategory.DOCUMENT_TRANSFORMATION,
         "scenario",
     ),
 ]
@@ -144,7 +155,7 @@ SCENARIO_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
 # ---------------------------------------------------------------------------
 
 SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
-    # DOCUMENT_QUESTION_ANSWERING variations
+    # DOCUMENT_QUESTION_ANSWERING variations (9 total: 4 scenario + 5 synthetic)
     (
         "What does the product manual say about the return policy?",
         IntentCategory.DOCUMENT_QUESTION_ANSWERING,
@@ -170,8 +181,23 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.DOCUMENT_QUESTION_ANSWERING,
         "synthetic",
     ),
+    (
+        "What is the maintenance schedule in the equipment manual?",
+        IntentCategory.DOCUMENT_QUESTION_ANSWERING,
+        "synthetic",
+    ),
+    (
+        "Find the troubleshooting section for error code E-42 in the manual.",
+        IntentCategory.DOCUMENT_QUESTION_ANSWERING,
+        "synthetic",
+    ),
+    (
+        "What are the system requirements listed in the documentation?",
+        IntentCategory.DOCUMENT_QUESTION_ANSWERING,
+        "synthetic",
+    ),
 
-    # DOCUMENT_SUMMARISATION variations
+    # DOCUMENT_SUMMARISATION variations (6 total: 2 scenario + 4 synthetic)
     (
         "Give me a summary of the meeting notes.",
         IntentCategory.DOCUMENT_SUMMARISATION,
@@ -192,8 +218,18 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.DOCUMENT_SUMMARISATION,
         "synthetic",
     ),
+    (
+        "Summarise the key findings from the quarterly report.",
+        IntentCategory.DOCUMENT_SUMMARISATION,
+        "synthetic",
+    ),
+    (
+        "Provide a three-bullet summary of the project proposal.",
+        IntentCategory.DOCUMENT_SUMMARISATION,
+        "synthetic",
+    ),
 
-    # DATA_ANALYSIS variations
+    # DATA_ANALYSIS variations (6 total: 2 scenario + 4 synthetic)
     (
         "What is the average revenue per region in the sales data?",
         IntentCategory.DATA_ANALYSIS,
@@ -214,8 +250,18 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.DATA_ANALYSIS,
         "synthetic",
     ),
+    (
+        "Compare monthly sales trends across all regions.",
+        IntentCategory.DATA_ANALYSIS,
+        "synthetic",
+    ),
+    (
+        "Find the month with the highest sales growth rate.",
+        IntentCategory.DATA_ANALYSIS,
+        "synthetic",
+    ),
 
-    # RESEARCH variations
+    # RESEARCH variations (5 total: 1 scenario + 4 synthetic)
     (
         "Find and compare three project management tools for a small team.",
         IntentCategory.RESEARCH,
@@ -236,8 +282,18 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.RESEARCH,
         "synthetic",
     ),
+    (
+        "Find and compare password managers for team use.",
+        IntentCategory.RESEARCH,
+        "synthetic",
+    ),
+    (
+        "Research open-source alternatives to Adobe Creative Suite.",
+        IntentCategory.RESEARCH,
+        "synthetic",
+    ),
 
-    # COMMUNICATION variations
+    # COMMUNICATION variations (5 total: 1 scenario + 1 channel_unavailable + 3 synthetic)
     (
         "Send an email to john@example.com with the meeting summary.",
         IntentCategory.COMMUNICATION,
@@ -253,30 +309,62 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.COMMUNICATION,
         "synthetic",
     ),
-
-    # DOCUMENT_OPERATION variations
     (
-        "Extract all dates from the contract document.",
-        IntentCategory.DOCUMENT_OPERATION,
+        "Send a Slack message to the dev channel with the deployment status.",
+        IntentCategory.COMMUNICATION,
         "synthetic",
     ),
     (
-        "Convert the meeting notes to a PDF.",
-        IntentCategory.DOCUMENT_OPERATION,
+        "Draft a reply to the client's inquiry about pricing.",
+        IntentCategory.COMMUNICATION,
+        "synthetic",
+    ),
+
+    # DOCUMENT_EXTRACTION variations (5 total: 1 scenario + 4 synthetic)
+    (
+        "Extract all dates from the contract document.",
+        IntentCategory.DOCUMENT_EXTRACTION,
         "synthetic",
     ),
     (
         "List all tables in the product manual.",
-        IntentCategory.DOCUMENT_OPERATION,
+        IntentCategory.DOCUMENT_EXTRACTION,
         "synthetic",
     ),
     (
         "Search the document for mentions of 'warranty'.",
-        IntentCategory.DOCUMENT_OPERATION,
+        IntentCategory.DOCUMENT_EXTRACTION,
+        "synthetic",
+    ),
+    (
+        "Extract all email addresses from the contact list.",
+        IntentCategory.DOCUMENT_EXTRACTION,
+        "synthetic",
+    ),
+    (
+        "Find all references to the compliance section in the policy document.",
+        IntentCategory.DOCUMENT_EXTRACTION,
         "synthetic",
     ),
 
-    # DESTRUCTIVE_OPERATION variations
+    # DOCUMENT_TRANSFORMATION variations (3 total: 2 scenario + 1 synthetic)
+    (
+        "Convert the meeting notes to a PDF.",
+        IntentCategory.DOCUMENT_TRANSFORMATION,
+        "synthetic",
+    ),
+    (
+        "Convert the CSV data to JSON format.",
+        IntentCategory.DOCUMENT_TRANSFORMATION,
+        "synthetic",
+    ),
+    (
+        "Transform the markdown notes into a structured task list.",
+        IntentCategory.DOCUMENT_TRANSFORMATION,
+        "synthetic",
+    ),
+
+    # DESTRUCTIVE_OPERATION variations (3 total: 1 scenario + 2 synthetic)
     (
         "Remove all temporary files from the cache directory.",
         IntentCategory.DESTRUCTIVE_OPERATION,
@@ -287,8 +375,13 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.DESTRUCTIVE_OPERATION,
         "synthetic",
     ),
+    (
+        "Purge all logs older than 30 days.",
+        IntentCategory.DESTRUCTIVE_OPERATION,
+        "synthetic",
+    ),
 
-    # INVALID variations
+    # INVALID variations (5 total: 2 scenario + 3 synthetic)
     (
         "",
         IntentCategory.INVALID,
@@ -304,8 +397,18 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.INVALID,
         "synthetic",
     ),
+    (
+        "xyz random gibberish",
+        IntentCategory.INVALID,
+        "synthetic",
+    ),
+    (
+        "   \t\n  ",
+        IntentCategory.INVALID,
+        "synthetic",
+    ),
 
-    # INFEASIBLE variations
+    # INFEASIBLE variations (3 total: 1 scenario + 2 synthetic)
     (
         "Build a time machine and go back to 1990.",
         IntentCategory.INFEASIBLE,
@@ -316,8 +419,13 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
         IntentCategory.INFEASIBLE,
         "synthetic",
     ),
+    (
+        "Make me a millionaire overnight.",
+        IntentCategory.INFEASIBLE,
+        "synthetic",
+    ),
 
-    # OUT_OF_SCOPE variations
+    # OUT_OF_SCOPE variations (4 total: 1 scenario + 3 synthetic)
     (
         "Give me legal advice on my divorce.",
         IntentCategory.OUT_OF_SCOPE,
@@ -331,6 +439,23 @@ SYNTHETIC_EXAMPLES: list[tuple[str, IntentCategory, str]] = [
     (
         "File my taxes for me.",
         IntentCategory.OUT_OF_SCOPE,
+        "synthetic",
+    ),
+    (
+        "Write a legally binding contract for me.",
+        IntentCategory.OUT_OF_SCOPE,
+        "synthetic",
+    ),
+
+    # CHANNEL_UNAVAILABLE variations (2 total: 1 scenario + 1 synthetic)
+    (
+        "Send a Telegram message to my boss saying I'm running late.",
+        IntentCategory.CHANNEL_UNAVAILABLE,
+        "synthetic",
+    ),
+    (
+        "Post this update to our Discord announcements channel.",
+        IntentCategory.CHANNEL_UNAVAILABLE,
         "synthetic",
     ),
 ]
@@ -372,15 +497,39 @@ def check_duplicates(df: pd.DataFrame) -> pd.DataFrame:
     return exact_dupes
 
 
+def check_near_duplicates(df: pd.DataFrame, threshold: float = 0.9) -> list[tuple[int, int, float]]:
+    """Check for near-duplicate texts using TF-IDF similarity.
+
+    Returns:
+        List of (idx1, idx2, similarity) for pairs above threshold
+    """
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
+    tfidf_matrix = vectorizer.fit_transform(df["text"])
+    similarity_matrix = cosine_similarity(tfidf_matrix)
+
+    near_dupes = []
+    n = len(df)
+    for i in range(n):
+        for j in range(i + 1, n):
+            sim = similarity_matrix[i, j]
+            if sim >= threshold:
+                near_dupes.append((i, j, float(sim)))
+    return near_dupes
+
+
 def split_dataset(
     df: pd.DataFrame,
-    test_size: float = 0.25,
-    val_size: float = 0.15,
+    test_size: float = 0.2,
+    val_size: float = 0.2,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Split dataset into train, validation, and test sets.
 
     Stratified by intent to maintain class distribution.
+    Uses group-based splitting to prevent leakage from related examples.
     """
     # First split: train+val vs test
     train_val, test = train_test_split(
@@ -400,6 +549,38 @@ def split_dataset(
     )
 
     return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True)
+
+
+def split_dataset_by_group(
+    df: pd.DataFrame,
+    group_col: str = "source",
+    test_size: float = 0.2,
+    val_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Split dataset by group to prevent leakage from related examples.
+
+    All examples from the same source group go to the same split.
+    """
+    groups = df[group_col].unique()
+
+    # Split groups
+    from sklearn.model_selection import GroupShuffleSplit
+
+    # First split: train+val vs test
+    gss = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+    train_val_idx, test_idx = next(gss.split(df, groups=df[group_col]))
+    train_val = df.iloc[train_val_idx].reset_index(drop=True)
+    test = df.iloc[test_idx].reset_index(drop=True)
+
+    # Second split: train vs val
+    val_relative = val_size / (1 - test_size)
+    gss2 = GroupShuffleSplit(n_splits=1, test_size=val_relative, random_state=random_state)
+    train_idx, val_idx = next(gss2.split(train_val, groups=train_val[group_col]))
+    train = train_val.iloc[train_idx].reset_index(drop=True)
+    val = train_val.iloc[val_idx].reset_index(drop=True)
+
+    return train, val, test
 
 
 def save_splits(
@@ -426,6 +607,9 @@ def save_splits(
         "val_size": len(val),
         "test_size": len(test),
         "class_distribution": get_class_distribution(full),
+        "train_distribution": get_class_distribution(train),
+        "val_distribution": get_class_distribution(val),
+        "test_distribution": get_class_distribution(test),
         "scenario_examples": len(SCENARIO_EXAMPLES),
         "synthetic_examples": len(SYNTHETIC_EXAMPLES),
         "random_state": 42,
@@ -455,6 +639,15 @@ if __name__ == "__main__":
         print(dupes)
     else:
         print("\nNo exact duplicates found.")
+
+    # Check near-duplicates
+    near_dupes = check_near_duplicates(df, threshold=0.85)
+    if near_dupes:
+        print(f"\nWARNING: {len(near_dupes)} near-duplicate pairs found (similarity >= 0.85)!")
+        for i, j, sim in near_dupes[:10]:
+            print(f"  {sim:.3f}: [{i}] {df.iloc[i]['text'][:60]}... | [{j}] {df.iloc[j]['text'][:60]}...")
+    else:
+        print("\nNo near-duplicates found (similarity >= 0.85).")
 
     # Split and save
     train, val, test = split_dataset(df)

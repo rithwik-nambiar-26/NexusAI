@@ -1,0 +1,57 @@
+[
+  {
+    "text":"Delete every file in the notes\/ directory.",
+    "intent":"destructive_operation",
+    "source":"scenario"
+  },
+  {
+    "text":"Open the file data\/sample\/sales_2026.csv and report the total revenue for the 'Northern' region.",
+    "intent":"data_analysis",
+    "source":"scenario"
+  },
+  {
+    "text":"Deal with the report.",
+    "intent":"invalid",
+    "source":"scenario"
+  },
+  {
+    "text":"Give me legal advice on my divorce.",
+    "intent":"out_of_scope",
+    "source":"synthetic"
+  },
+  {
+    "text":"What are the key decisions from yesterday's meeting?",
+    "intent":"document_question_answering",
+    "source":"synthetic"
+  },
+  {
+    "text":"What are the termination conditions in our supplier contract, and what notice period applies?",
+    "intent":"document_question_answering",
+    "source":"scenario"
+  },
+  {
+    "text":"Send an email to john@example.com with the meeting summary.",
+    "intent":"communication",
+    "source":"synthetic"
+  },
+  {
+    "text":"Research the best Python web frameworks for a REST API.",
+    "intent":"research",
+    "source":"synthetic"
+  },
+  {
+    "text":"Create a brief overview of the sales data.",
+    "intent":"document_summarisation",
+    "source":"synthetic"
+  },
+  {
+    "text":"Predict next week's lottery numbers.",
+    "intent":"infeasible",
+    "source":"synthetic"
+  },
+  {
+    "text":"Extract all dates from the contract document.",
+    "intent":"document_operation",
+    "source":"synthetic"
+  }
+]

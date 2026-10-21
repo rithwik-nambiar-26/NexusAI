@@ -20,11 +20,13 @@ def test_intent_category_values():
         "data_analysis",
         "research",
         "communication",
-        "document_operation",
+        "document_extraction",
+        "document_transformation",
         "destructive_operation",
         "invalid",
         "infeasible",
         "out_of_scope",
+        "channel_unavailable",
     }
     actual = {c.value for c in IntentCategory}
     assert actual == expected
@@ -38,11 +40,13 @@ def test_intent_category_supported():
     assert IntentCategory.DATA_ANALYSIS in supported
     assert IntentCategory.RESEARCH in supported
     assert IntentCategory.COMMUNICATION in supported
-    assert IntentCategory.DOCUMENT_OPERATION in supported
+    assert IntentCategory.DOCUMENT_EXTRACTION in supported
+    assert IntentCategory.DOCUMENT_TRANSFORMATION in supported
     assert IntentCategory.DESTRUCTIVE_OPERATION not in supported
     assert IntentCategory.INVALID not in supported
     assert IntentCategory.INFEASIBLE not in supported
     assert IntentCategory.OUT_OF_SCOPE not in supported
+    assert IntentCategory.CHANNEL_UNAVAILABLE not in supported
 
 
 def test_intent_category_special():
@@ -52,7 +56,15 @@ def test_intent_category_special():
     assert IntentCategory.INVALID in special
     assert IntentCategory.INFEASIBLE in special
     assert IntentCategory.OUT_OF_SCOPE in special
+    assert IntentCategory.CHANNEL_UNAVAILABLE in special
     assert IntentCategory.DOCUMENT_QUESTION_ANSWERING not in special
+
+
+def test_intent_category_requires_approval():
+    """Test requires_approval() returns correct intents."""
+    approval = IntentCategory.requires_approval()
+    assert IntentCategory.DESTRUCTIVE_OPERATION in approval
+    assert IntentCategory.DOCUMENT_QUESTION_ANSWERING not in approval
 
 
 def test_classification_status_values():
@@ -144,6 +156,27 @@ def test_intent_classification_result_requires_special_handling():
             status=ClassificationStatus.CONFIDENT,
         )
         assert result.requires_special_handling() is False, f"{cat} should not require special handling"
+
+
+def test_intent_classification_result_requires_approval():
+    """Test requires_approval() method."""
+    for cat in IntentCategory.requires_approval():
+        result = IntentClassificationResult(
+            original_request="test",
+            predicted_intent=cat,
+            confidence=0.9,
+            status=ClassificationStatus.CONFIDENT,
+        )
+        assert result.requires_approval() is True, f"{cat} should require approval"
+
+    for cat in IntentCategory.supported():
+        result = IntentClassificationResult(
+            original_request="test",
+            predicted_intent=cat,
+            confidence=0.9,
+            status=ClassificationStatus.CONFIDENT,
+        )
+        assert result.requires_approval() is False, f"{cat} should not require approval"
 
 
 def test_intent_classification_result_with_none_intent():

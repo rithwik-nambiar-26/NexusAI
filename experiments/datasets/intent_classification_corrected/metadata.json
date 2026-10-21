@@ -1,0 +1,37 @@
+{
+  "total_examples": 52,
+  "train_size": 30,
+  "val_size": 11,
+  "test_size": 11,
+  "class_distribution": {
+    "document_question_answering": 9,
+    "data_analysis": 6,
+    "document_summarisation": 6,
+    "document_operation": 6,
+    "communication": 5,
+    "research": 5,
+    "invalid": 5,
+    "out_of_scope": 4,
+    "destructive_operation": 3,
+    "infeasible": 3
+  },
+  "scenario_examples": 18,
+  "synthetic_examples": 34,
+  "random_state": 42,
+  "intent_categories": [
+    "document_question_answering",
+    "document_summarisation",
+    "data_analysis",
+    "research",
+    "communication",
+    "document_operation",
+    "destructive_operation",
+    "invalid",
+    "infeasible",
+    "out_of_scope"
+  ],
+  "provenance": {
+    "scenario_based": "18 evaluation scenarios (SC-01 through SC-18)",
+    "synthetic": "Manually authored variations for training robustness. Not real user data."
+  }
+}

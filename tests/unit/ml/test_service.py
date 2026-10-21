@@ -119,10 +119,11 @@ def test_service_get_supported_intents():
     service = IntentClassificationService()
     supported = service.get_supported_intents()
 
-    assert len(supported) == 6
+    assert len(supported) == 7
     assert "document_question_answering" in [i.value for i in supported]
     assert "document_summarisation" in [i.value for i in supported]
     assert "destructive_operation" not in [i.value for i in supported]
+    assert "channel_unavailable" not in [i.value for i in supported]
 
 
 def test_service_get_all_intents():
@@ -130,4 +131,4 @@ def test_service_get_all_intents():
     service = IntentClassificationService()
     all_intents = service.get_all_intents()
 
-    assert len(all_intents) == 10
+    assert len(all_intents) == 12

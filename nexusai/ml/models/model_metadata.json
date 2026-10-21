@@ -1,18 +1,23 @@
 {
   "classes": [
+    "channel_unavailable",
     "communication",
     "data_analysis",
     "destructive_operation",
-    "document_operation",
+    "document_extraction",
     "document_question_answering",
     "document_summarisation",
+    "document_transformation",
     "infeasible",
     "invalid",
     "out_of_scope",
     "research"
   ],
-  "n_classes": 10,
+  "n_classes": 12,
+  "model_type": "logistic_regression",
   "confidence_threshold": 0.55,
   "clarification_threshold": 0.35,
+  "calibrated": true,
+  "calibration_method": "sigmoid",
   "sklearn_version": "1.9.0"
 }

@@ -7,15 +7,19 @@ from nexusai.ml.dataset import (
     SYNTHETIC_EXAMPLES,
     build_dataset,
     check_duplicates,
+    check_near_duplicates,
     get_class_distribution,
+    split_dataset,
+    SCENARIO_EXAMPLES,
+    SYNTHETIC_EXAMPLES,
 )
 from nexusai.ml.schemas import IntentCategory
 
 
 def test_scenario_examples_count():
     """Test that we have the expected number of scenario examples."""
-    # 18 scenarios, some map to same intent
-    assert len(SCENARIO_EXAMPLES) == 18
+    # 19 scenarios (SC-01 through SC-18, with SC-13 and SC-16 as separate)
+    assert len(SCENARIO_EXAMPLES) == 19
 
 
 def test_synthetic_examples_count():
@@ -37,8 +41,8 @@ def test_build_dataset_class_distribution():
     df = build_dataset()
     dist = get_class_distribution(df)
 
-    # All 10 intents should be present
-    assert len(dist) == 10
+    # All 12 intents should be present
+    assert len(dist) == 12
     for cat in IntentCategory:
         assert cat.value in dist
         assert dist[cat.value] >= 3  # At least 3 examples per class
@@ -51,10 +55,17 @@ def test_no_duplicate_texts():
     assert len(dupes) == 0
 
 
+def test_no_near_duplicates():
+    """Test that there are no near-duplicate texts."""
+    df = build_dataset()
+    near_dupes = check_near_duplicates(df, threshold=0.85)
+    assert len(near_dupes) == 0
+
+
 def test_split_dataset():
     """Test dataset splitting with appropriate sizes for small dataset."""
     df = build_dataset()
-    # Use train/test split only (3-way split too small for 10 classes)
+    # Use train/test split only (3-way split too small for 10+ classes)
     from sklearn.model_selection import train_test_split
 
     train, test = train_test_split(

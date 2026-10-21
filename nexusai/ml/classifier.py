@@ -1,4 +1,4 @@
-"""Intent classification model using TF-IDF + Logistic Regression.
+"""Intent classification model using TF-IDF + Logistic Regression / LinearSVC.
 
 A reproducible, scikit-learn baseline for intent classification.
 Follows NexusAI conventions: structured output, confidence handling,
@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import json
 import pickle
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import LinearSVC
 
 from nexusai.app.core.exceptions import ServiceUnavailableError
 from nexusai.app.core.logging import get_logger
@@ -37,14 +40,22 @@ MODEL_PATH = MODEL_DIR / "intent_classifier.pkl"
 VECTORIZER_PATH = MODEL_DIR / "tfidf_vectorizer.pkl"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 METADATA_PATH = MODEL_DIR / "model_metadata.json"
+CALIBRATOR_PATH = MODEL_DIR / "calibrator.pkl"
 
 # Default confidence threshold (tuned on validation data)
 DEFAULT_CONFIDENCE_THRESHOLD = 0.55
 CLARIFICATION_THRESHOLD = 0.35
 
 
+class ModelType(str, Enum):
+    """Supported model types."""
+
+    LOGISTIC_REGRESSION = "logistic_regression"
+    LINEAR_SVC = "linear_svc"
+
+
 class IntentClassifier:
-    """TF-IDF + Logistic Regression intent classifier.
+    """TF-IDF + (Logistic Regression / LinearSVC) intent classifier.
 
     Provides structured classification output with confidence scores,
     abstention for low-confidence predictions, and special handling
@@ -53,19 +64,47 @@ class IntentClassifier:
 
     def __init__(
         self,
+        model_type: ModelType = ModelType.LOGISTIC_REGRESSION,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
         clarification_threshold: float = CLARIFICATION_THRESHOLD,
+        calibrate_probabilities: bool = True,
+        calibration_method: Literal["sigmoid", "isotonic"] = "sigmoid",
+        cv_folds: int = 3,
     ):
+        self.model_type = model_type
         self.confidence_threshold = confidence_threshold
         self.clarification_threshold = clarification_threshold
+        self.calibrate_probabilities = calibrate_probabilities
+        self.calibration_method = calibration_method
+        self.cv_folds = cv_folds
 
         self.pipeline: Pipeline | None = None
+        self.calibrator: CalibratedClassifierCV | None = None
         self.label_encoder: LabelEncoder | None = None
         self._is_fitted = False
         self._classes: list[str] = []
 
     def _create_pipeline(self) -> Pipeline:
-        """Create the TF-IDF + Logistic Regression pipeline."""
+        """Create the TF-IDF + classifier pipeline."""
+        if self.model_type == ModelType.LOGISTIC_REGRESSION:
+            clf = LogisticRegression(
+                max_iter=2000,
+                C=1.0,
+                class_weight="balanced",
+                random_state=42,
+                solver="lbfgs",
+            )
+        elif self.model_type == ModelType.LINEAR_SVC:
+            clf = LinearSVC(
+                max_iter=5000,
+                C=1.0,
+                class_weight="balanced",
+                random_state=42,
+                dual="auto",
+            )
+        else:
+            raise ValueError(f"Unknown model type: {self.model_type}")
+
         return Pipeline(
             [
                 (
@@ -78,16 +117,7 @@ class IntentClassifier:
                         sublinear_tf=True,
                     ),
                 ),
-                (
-                    "clf",
-                    LogisticRegression(
-                        max_iter=1000,
-                        C=1.0,
-                        class_weight="balanced",
-                        random_state=42,
-                        solver="lbfgs",
-                    ),
-                ),
+                ("clf", clf),
             ]
         )
 
@@ -114,15 +144,47 @@ class IntentClassifier:
         self._classes = self.label_encoder.classes_.tolist()
 
         self.pipeline = self._create_pipeline()
-        self.pipeline.fit(train_texts, y_train)
+
+        # Optionally calibrate probabilities
+        if self.calibrate_probabilities:
+            logger.info("Training with probability calibration...")
+            # Determine appropriate CV folds based on class distribution
+            from collections import Counter
+            class_counts = Counter(y_train)
+            min_class_count = min(class_counts.values())
+            cv_folds = min(self.cv_folds, min_class_count)
+
+            if cv_folds < 2:
+                logger.warning("Insufficient samples for calibration, falling back to uncalibrated model")
+                self.calibrate_probabilities = False
+                self.pipeline.fit(train_texts, y_train)
+            else:
+                try:
+                    self.calibrator = CalibratedClassifierCV(
+                        self.pipeline,
+                        method=self.calibration_method,
+                        cv=cv_folds,
+                    )
+                    self.calibrator.fit(train_texts, y_train)
+                    self.pipeline = self.calibrator  # Use calibrated classifier for predictions
+                except ValueError as e:
+                    logger.warning("Calibration failed, falling back to uncalibrated model: %s", e)
+                    self.calibrate_probabilities = False
+                    self.pipeline.fit(train_texts, y_train)
+        else:
+            self.pipeline.fit(train_texts, y_train)
+
         self._is_fitted = True
 
         metadata = {
             "n_classes": len(self._classes),
             "classes": self._classes,
             "n_train_samples": len(train_texts),
+            "model_type": self.model_type.value,
             "confidence_threshold": self.confidence_threshold,
             "clarification_threshold": self.clarification_threshold,
+            "calibrated": self.calibrate_probabilities,
+            "calibration_method": self.calibration_method if self.calibrate_probabilities else None,
         }
 
         # Evaluate on validation set if provided
@@ -136,8 +198,10 @@ class IntentClassifier:
         logger.info(
             "Intent classifier trained",
             extra={
+                "model_type": self.model_type.value,
                 "n_classes": len(self._classes),
                 "n_train": len(train_texts),
+                "calibrated": self.calibrate_probabilities,
             },
         )
 
@@ -165,28 +229,43 @@ class IntentClassifier:
         macro_recall = recall_score(y_true, y_pred, average="macro", zero_division=0)
         macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
 
-        # Per-class metrics
+        # Per-class metrics - handle missing classes in predictions
+        # Use labels parameter to ensure all classes are included in report
+        present_labels = np.unique(np.concatenate([y_true, y_pred]))
+        present_class_names = [self._classes[i] for i in present_labels]
+
         report = classification_report(
-            y_true, y_pred, target_names=self._classes, output_dict=True, zero_division=0
+            y_true, y_pred, labels=present_labels, target_names=present_class_names,
+            output_dict=True, zero_division=0
         )
-        cm = confusion_matrix(y_true, y_pred)
+        cm = confusion_matrix(y_true, y_pred, labels=present_labels)
+
+        # Build per-class dict with all classes (0 for missing)
+        per_class = {}
+        for cls_name in self._classes:
+            if cls_name in report:
+                per_class[cls_name] = {
+                    "precision": report[cls_name]["precision"],
+                    "recall": report[cls_name]["recall"],
+                    "f1": report[cls_name]["f1-score"],
+                    "support": int(report[cls_name]["support"]),
+                }
+            else:
+                per_class[cls_name] = {
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f1": 0.0,
+                    "support": 0,
+                }
 
         return {
             "accuracy": accuracy,
             "macro_precision": macro_precision,
             "macro_recall": macro_recall,
             "macro_f1": macro_f1,
-            "per_class": {
-                cls: {
-                    "precision": report[cls]["precision"],
-                    "recall": report[cls]["recall"],
-                    "f1": report[cls]["f1-score"],
-                    "support": int(report[cls]["support"]),
-                }
-                for cls in self._classes
-            },
+            "per_class": per_class,
             "confusion_matrix": cm.tolist(),
-            "confusion_matrix_labels": self._classes,
+            "confusion_matrix_labels": [self._classes[i] for i in present_labels],
         }
 
     def _tune_threshold(self, val_texts: list[str], val_labels: list[str]) -> None:
@@ -326,6 +405,8 @@ class IntentClassifier:
                 result.abstention_reason = "This request is outside NexusAI's supported scope."
             elif predicted_intent == IntentCategory.DESTRUCTIVE_OPERATION:
                 result.abstention_reason = "This is a destructive operation requiring explicit confirmation."
+            elif predicted_intent == IntentCategory.CHANNEL_UNAVAILABLE:
+                result.abstention_reason = "The requested communication channel is not available."
 
         logger.debug(
             "Intent classification completed",
@@ -352,8 +433,20 @@ class IntentClassifier:
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(self.pipeline, f)
 
+        # Extract vectorizer - handle Pipeline, CalibratedClassifierCV, or plain classifier
+        if hasattr(self.pipeline, "named_steps") and "tfidf" in self.pipeline.named_steps:
+            # Plain Pipeline
+            vectorizer = self.pipeline.named_steps["tfidf"]
+        elif hasattr(self.pipeline, "calibrated_classifiers_"):
+            # CalibratedClassifierCV - get from estimator of first calibrated classifier
+            base_estimator = self.pipeline.calibrated_classifiers_[0].estimator
+            vectorizer = base_estimator.named_steps["tfidf"]
+        else:
+            # Fallback: try to find vectorizer in pipeline steps
+            raise ServiceUnavailableError("Cannot extract vectorizer from pipeline")
+
         with open(VECTORIZER_PATH, "wb") as f:
-            pickle.dump(self.pipeline.named_steps["tfidf"], f)
+            pickle.dump(vectorizer, f)
 
         with open(LABEL_ENCODER_PATH, "wb") as f:
             pickle.dump(self.label_encoder, f)
@@ -361,8 +454,11 @@ class IntentClassifier:
         metadata = {
             "classes": self._classes,
             "n_classes": len(self._classes),
+            "model_type": self.model_type.value,
             "confidence_threshold": self.confidence_threshold,
             "clarification_threshold": self.clarification_threshold,
+            "calibrated": self.calibrate_probabilities,
+            "calibration_method": self.calibration_method if self.calibrate_probabilities else None,
             "sklearn_version": __import__("sklearn").__version__,
         }
 
@@ -380,6 +476,9 @@ class IntentClassifier:
         try:
             with open(MODEL_PATH, "rb") as f:
                 self.pipeline = pickle.load(f)
+
+            with open(VECTORIZER_PATH, "rb") as f:
+                pickle.load(f)  # Just verify it exists
 
             with open(LABEL_ENCODER_PATH, "rb") as f:
                 self.label_encoder = pickle.load(f)
