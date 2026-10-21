@@ -1,7 +1,7 @@
 # NexusAI
 
 **Working title:** NexusAI: AI-Powered Personal Task Automation  
-**Status:** Phase 1 — Days 1–4 implemented (scaffolding, intent classification, structured planning, document intelligence)  
+**Status:** Phase 1 — Days 1–5 implemented (scaffolding, intent classification, structured planning, document intelligence, controlled execution)  
 **MSc Data Science project**  
 **Second Review:** 23–25 October 2026
 
@@ -127,6 +127,10 @@ With the FastAPI server running (`python -m nexusai serve`):
 | POST | `/api/v1/documents/answer` | Answer a question grounded in the indexed documents |
 | POST | `/api/v1/documents/summarise` | Summarise a document or the indexed corpus |
 | GET | `/api/v1/documents/capabilities` | List the planner capabilities this module satisfies |
+| POST | `/api/v1/execution/execute` | Execute a validated plan through the tool registry |
+| POST | `/api/v1/execution/approve` | Approve or deny a pending operation |
+| GET | `/api/v1/execution/tools` | List the registered tool capabilities |
+| GET | `/api/v1/execution/status` | Execution engine availability |
 | POST | `/api/v1/workflows` | Create a workflow run |
 | GET | `/api/v1/workflows` | List workflow runs (paginated, filterable) |
 | GET | `/api/v1/workflows/{run_id}` | Get a workflow run with steps |
@@ -193,6 +197,14 @@ NexusAI/
 │   │       ├── schemas.py      # Plan, Task, TaskType, PlanStatus
 │   │       ├── dependencies.py # NetworkX graph resolution
 │   │       └── service.py      # Decomposition + validation
+│   ├── app/
+│   │   ├── execution/           # Tool registry + execution engine (Day 5)
+│   │   │   ├── registry.py      # Typed tool registry
+│   │   │   ├── tools.py         # Day 4 capability adapters
+│   │   │   ├── engine.py        # Execution lifecycle, approval, retries
+│   │   │   └── derivation.py    # Task input derivation
+│   │   └── security/            # Filesystem access policy (Day 5)
+│   │       └── paths.py         # Allowed-root path policy
 │   ├── rag/                    # Document intelligence (Day 4)
 │   │   ├── schemas.py          # Document, Chunk, Evidence, Answer schemas
 │   │   ├── extractors.py       # PDF, DOCX, TXT, Markdown extraction
@@ -202,7 +214,7 @@ NexusAI/
 │   │   ├── service.py          # Ingestion, retrieval, grounded answers
 │   │   └── capabilities.py     # Planner capability adapter
 │   └── tools/                  # Placeholder (Day 5)
-├── tests/                      # 439 tests (unit/integration/e2e)
+├── tests/                      # 526 tests (unit/integration/e2e)
 ├── experiments/
 │   ├── scenarios/              # 18 evaluation scenarios (versioned)
 │   ├── datasets/               # Dataset documentation
@@ -247,7 +259,7 @@ All research foundation documents are in `docs/research/`:
 | **Day 2.2** ✅ | Intent classifier reliability (dataset, model comparison, thresholds) | **Complete** |
 | **Day 3** ✅ | Planner (typed plan schema, dependencies, validation) | **Complete** |
 | **Day 4** ✅ | Document intelligence (ingestion, chunking, embedding, retrieval, grounded answers) | **Complete** |
-| Day 5 | Tool registry + executor (validation, approval) | Executor, tool-selection accuracy |
+| **Day 5** ✅ | Tool registry + executor (validation, approval) | **Complete** |
 | Day 6 | Verifier + replanner (bounded retries) | Verifier/replanner, recovery metrics |
 | Day 7 | Report generator, experiment harness, first test-matrix pass | End-to-end run, preliminary metrics |
 
@@ -277,12 +289,12 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 - ✅ **Intent classification** — TF-IDF + Logistic Regression baseline over a 12-class taxonomy, with validation-tuned thresholds, optional probability calibration, and abstention for unclear requests
 - ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
 - ✅ **Document intelligence** — PDF/DOCX/TXT/Markdown ingestion, normalisation and chunking with stable ids, local embedding, a numpy-backed local vector index, retrieval with source references, and grounded question answering and summarisation with an explicit insufficient-evidence response
-- ✅ 439 passing tests (unit, integration, e2e, UI smoke)
+- ✅ **Controlled execution** — explicit tool registry with Pydantic input/output schemas, dependency-ordered execution, approval enforced by the executor and bound to the task's inputs, bounded retries, and a filesystem access policy that confines reads to configured roots
+- ✅ 526 passing tests (unit, integration, e2e, UI smoke)
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 
-### Planned (Days 5–7)
-- ⏳ Tool registry with schema validation and user approval gates, and the controlled executor
+### Planned (Days 6–7)
 - ⏳ Independent verifier and bounded adaptive replanner
 - ⏳ Execution report generator and experiment harness
 - ⏳ First full test-matrix execution (Conditions A/B/C)

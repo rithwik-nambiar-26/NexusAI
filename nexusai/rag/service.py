@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from nexusai.app.core.logging import get_logger
+from nexusai.app.security.paths import PathPolicy, PathPolicyError
 from nexusai.rag.chunking import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
@@ -57,6 +58,17 @@ DEFAULT_STORE_DIR = Path("artifacts/vectors")
 
 #: Minimum retrieval score for a chunk to be considered supporting evidence.
 DEFAULT_MIN_EVIDENCE_SCORE = 0.05
+
+#: How each path-policy failure is reported by ingestion.
+_POLICY_STATUS: dict[str, ExtractionStatus] = {
+    "unsupported_type": ExtractionStatus.UNSUPPORTED_FORMAT,
+    "not_found": ExtractionStatus.FAILED,
+    "not_a_file": ExtractionStatus.FAILED,
+    "not_readable": ExtractionStatus.FAILED,
+    "unresolvable_path": ExtractionStatus.FAILED,
+    "no_roots": ExtractionStatus.PATH_NOT_ALLOWED,
+    "outside_root": ExtractionStatus.PATH_NOT_ALLOWED,
+}
 
 #: Default number of chunks to retrieve per query.
 DEFAULT_TOP_K = 5
@@ -100,6 +112,7 @@ class DocumentIntelligenceService:
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         min_evidence_score: float = DEFAULT_MIN_EVIDENCE_SCORE,
         relative_evidence_ratio: float = DEFAULT_RELATIVE_EVIDENCE_RATIO,
+        path_policy: PathPolicy | None = None,
     ) -> None:
         self.store_dir = Path(store_dir)
         self.embedder = embedder or HashingEmbedder()
@@ -107,6 +120,10 @@ class DocumentIntelligenceService:
         self.chunk_overlap = chunk_overlap
         self.min_evidence_score = min_evidence_score
         self.relative_evidence_ratio = relative_evidence_ratio
+        # When a policy is supplied, only paths inside its allowed roots
+        # may be read. With no policy the service is unrestricted, which is
+        # only appropriate for a local, single-user tool.
+        self.path_policy = path_policy
 
         self.store = VectorStore(self.store_dir, self.embedder.dimension)
         self.store.load()
@@ -115,6 +132,16 @@ class DocumentIntelligenceService:
     # ------------------------------------------------------------------
     # Ingestion
     # ------------------------------------------------------------------
+    def _resolve_readable_path(self, path: Path | str) -> Path:
+        """Resolve *path* under the path policy.
+
+        Raises:
+            PathPolicyError: The path may not be read.
+        """
+        if self.path_policy is None:
+            return Path(path)
+        return self.path_policy.resolve(path)
+
     def ingest(
         self,
         path: Path | str,
@@ -128,14 +155,25 @@ class DocumentIntelligenceService:
         reports ``duplicate=True``.
 
         Args:
-            path: Path to the document.
+            path: Path to the document. When a path policy is configured,
+                the path must resolve inside an allowed root.
             name: Display name; defaults to the file name.
             metadata: Extra document metadata to store.
 
         Returns:
             An :class:`IngestionResult` describing the outcome.
         """
-        file_path = Path(path)
+        try:
+            file_path = self._resolve_readable_path(path)
+        except PathPolicyError as exc:
+            logger.warning(
+                "Document ingestion refused by path policy",
+                extra={"code": exc.code, "path": str(path)},
+            )
+            return IngestionResult(
+                status=_POLICY_STATUS.get(exc.code, ExtractionStatus.PATH_NOT_ALLOWED),
+                message=str(exc),
+            )
 
         try:
             sections, page_count, doc_format = extract_document(file_path)

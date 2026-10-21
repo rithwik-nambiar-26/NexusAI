@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
+from nexusai.app.api.routes.execution import router as execution_router
 from nexusai.app.api.routes.health import router as health_router
 from nexusai.app.api.routes.intent import router as intent_router
 from nexusai.app.api.routes.planner import router as planner_router
@@ -25,6 +26,11 @@ from nexusai.app.core.exceptions import register_exception_handlers
 from nexusai.app.core.logging import configure_from_settings
 from nexusai.app.core.middleware import RequestContextMiddleware
 from nexusai.app.db.session import build_engine_and_schema, set_global_engine
+from nexusai.app.execution.engine import ExecutionEngine
+from nexusai.app.execution.registry import ToolRegistry
+from nexusai.app.execution.tools import register_document_tools
+from nexusai.app.security.paths import PathPolicy
+from nexusai.rag.capabilities import DocumentCapabilities
 from nexusai.rag.service import DocumentIntelligenceService
 
 
@@ -67,13 +73,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store_dir = Path(settings.vector_store_dir)
         if not store_dir.is_absolute():
             store_dir = REPO_ROOT / store_dir
-        document_service = DocumentIntelligenceService(store_dir=store_dir)
+
+        # Build the filesystem access policy from the configured roots.
+        roots = []
+        for root in settings.allowed_document_roots:
+            root_path = Path(root)
+            if not root_path.is_absolute():
+                root_path = REPO_ROOT / root_path
+            roots.append(root_path)
+        path_policy = PathPolicy(roots=roots, base_dir=REPO_ROOT)
+
+        document_service = DocumentIntelligenceService(
+            store_dir=store_dir,
+            path_policy=path_policy,
+        )
     except Exception:
         logging.getLogger("nexusai.app.main").exception(
             "failed to initialise the document intelligence service; the "
             "document endpoints will report the service as unavailable"
         )
         document_service = None
+
+    # Build the tool registry and the execution engine. The registry is
+    # populated with the Day 4 document capabilities, so a planner task
+    # binds without a translation layer.
+    tool_registry = ToolRegistry()
+    execution_engine = ExecutionEngine(tool_registry)
+    if document_service is not None:
+        try:
+            register_document_tools(
+                tool_registry,
+                DocumentCapabilities(document_service),
+            )
+        except Exception:
+            logging.getLogger("nexusai.app.main").exception(
+                "failed to register the document tools; the executor will have "
+                "no registered capabilities"
+            )
 
     app = FastAPI(
         title=settings.app_name,
@@ -95,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {"name": "intent", "description": "Intent classification for user requests."},
             {"name": "planner", "description": "Structured task planning and decomposition."},
             {"name": "documents", "description": "Document ingestion, retrieval and grounded answers."},
+            {"name": "execution", "description": "Controlled tool execution of validated plans."},
         ],
     )
 
@@ -102,6 +139,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.document_service = document_service
+    app.state.tool_registry = tool_registry
+    app.state.execution_engine = execution_engine
+    app.state.last_execution_report = None
 
     if settings.cors_origins:
         app.add_middleware(
@@ -125,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(intent_router)
     app.include_router(planner_router)
     app.include_router(rag_router)
+    app.include_router(execution_router)
 
     return app
 

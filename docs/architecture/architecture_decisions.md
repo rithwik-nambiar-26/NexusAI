@@ -31,12 +31,18 @@ Records significant architectural decisions, the alternatives considered, the ra
 | AD-17 | numpy-backed local vector index instead of ChromaDB | Accepted (Day 4) | ChromaDB was installed and evaluated: it pulls in a large dependency tree (OpenTelemetry, Kubernetes, OAuth) for functionality not yet needed, ships an `anonymized_telemetry` module that conflicts with the local-first requirement, and its installation changed unrelated packages. A numpy index is ~100 lines, deterministic, inspectable and keeps the dependency surface small | The index is single-process and in-memory; a much larger corpus would need a different backend | O3 |
 | AD-18 | Extractive answers and summaries, with an explicit insufficient-evidence outcome | Accepted (Day 4) | Every claim can be checked against the source; no generative model is required, so the pipeline is testable offline. A generative backend can be added behind the same service interface | Less fluent output than a generative summary; lexical matching can miss paraphrases | O3, O5 |
 | AD-19 | Hashing embedder as the default, Sentence Transformers opt-in | Accepted (Day 4) | The whole pipeline works with no model files and no network, which keeps the test suite deterministic; the local model is available for better semantic matching | The hashing embedder matches on lexical overlap, so paraphrases are weaker matches | O3 |
+| AD-20 | Single filesystem access policy with configurable allowed roots | Accepted (Day 5) | One place decides what may be read; canonicalisation plus a containment check defeats traversal and symlink escapes. The document API and the executor share one policy instance, so they cannot diverge | Paths outside the configured roots are refused even when they are legitimate; the roots must be configured | O4 |
+| AD-21 | Explicit tool registry; nothing executes unless registered | Accepted (Day 5) | A capability name resolves to a handler only through registration, so there is no dynamic dispatch and no path from a plan to an arbitrary function | Every new capability needs a schema, a handler and tests | O4 |
+| AD-22 | Approval bound to a fingerprint of the task's validated inputs | Accepted (Day 5) | An approval authorises one specific operation; changing the inputs invalidates it, so a granted approval cannot be reused for a different action | The caller must re-approve after any input change, even a harmless one | O4, O5 |
+| AD-23 | In-process duplicate-execution guard, not exactly-once execution | Accepted (Day 5) | Prevents a repeated side effect within one engine's lifetime without introducing a distributed transaction or a durable store | The guard is lost on restart; exactly-once execution would need a transactional store, which is out of scope for an MSc project | O4 |
 
 ## 3. Decisions pending (Phase 1)
 
 - RAG embedding model and chunking strategy — settled in Day 4: chunking packs paragraphs into 800-character windows with 100-character overlap; the hashing embedder is the default and Sentence Transformers is opt-in (AD-19).
 - Plan schema serialisation and step type vocabulary — partly settled in Day 3: the vocabulary is the `TaskType` enum and the plan serialises through Pydantic (JSON).
-- Tool registry format and schema language (JSON Schema vs. Pydantic vs. dataclasses).
+- Tool registry format and schema language — settled in Day 5: Pydantic models for the input and output schemas, with a `ToolDefinition` holding the handler, permissions, timeout and retry policy.
+- A write or send tool, and the tool schemas that would accompany it. The approval path is implemented and tested, but no state-changing handler exists yet.
+- Durable execution history and exactly-once execution.
 - Verification criterion language (per-step expected-outcome templates vs. LLM-based checker).
 - Local UI: terminal/CLI vs. minimal local interface.
 - Whether the Day 2 intent taxonomy is extended or merged, pending more labelled data.

@@ -12,10 +12,21 @@ from nexusai.app.main import create_app
 
 @pytest.fixture
 def client(tmp_path) -> TestClient:
-    """Create a test client with an isolated database and vector index."""
+    """Create a test client with an isolated database and vector index.
+
+    The temporary directory is added to the allowed document roots so the
+    fixtures the test writes can be ingested, while the path policy still
+    governs what may be read.
+    """
     settings = Settings(
         database_url="sqlite:///:memory:",
         vector_store_dir=str(tmp_path / "vectors"),
+        allowed_document_roots=[
+            "./data",
+            "./docs",
+            "./experiments",
+            str(tmp_path),
+        ],
     )
     app = create_app(settings)
     return TestClient(app)

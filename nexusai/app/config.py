@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     # resolved against the repository root.
     vector_store_dir: str = "./artifacts/vectors"
 
+    # --- Filesystem access policy -------------------------------------------
+    # Directories that may be read from disk. Every path reaching the
+    # filesystem is resolved and checked against these roots, so a caller
+    # cannot read a file outside them. Relative roots are resolved
+    # against the repository root.
+    allowed_document_roots: list[str] = Field(
+        default_factory=lambda: ["./data", "./docs", "./experiments"]
+    )
+
     # --- API server --------------------------------------------------------
     api_host: str = "127.0.0.1"
     api_port: int = 8000

@@ -56,8 +56,8 @@ A high-level, architecture-agnostic description of the NexusAI system. It define
 | Intent router | Classifies intent (ML classifier) with LLM fallback for out-of-taxonomy inputs | O1 | ✅ Day 2 (ML classifier); LLM fallback pending |
 | Planner | Decomposes the goal into a typed, dependency-aware plan with declared expected outcomes | O2 | ✅ Day 3 (see `planner_design.md`) |
 | RAG module | Retrieves relevant passages from the local user corpus; returns cited evidence | O3 | ✅ Day 4 (see `rag_architecture.md`) |
-| Tool registry | Holds registered tools with input schemas; resolves intent/tool to concrete tool | O4 | ⏳ Day 5 |
-| Executor | Validates inputs against schema; enforces approval gates; executes tools; captures outputs | O4 | ⏳ Day 5 |
+| Tool registry | Holds registered tools with input schemas; resolves intent/tool to concrete tool | O4 | ✅ Day 5 (see `execution_engine.md`) |
+| Executor | Validates inputs against schema; enforces approval gates; executes tools; captures outputs | O4 | ✅ Day 5 (see `execution_engine.md`) |
 | Verifier | Independently checks each step's actual output against its declared expected outcome | O5 | ⏳ Day 6 |
 | Replanner | On verified failure, revises remaining steps within a bounded retry budget | O5 | ⏳ Day 6 |
 | Report generator | Produces the auditable execution report (goal, plan, per-step evidence, verification, retries, outcome) | O5/O6 | ⏳ Day 7 |
@@ -73,6 +73,13 @@ normalisation and chunking, local embedding, a numpy-backed vector index,
 retrieval, and grounded question answering and summarisation with traceable
 source references. It supplies the `document.read`, `document.extract` and
 `llm.summarise` capabilities the planner's document tasks require.
+
+The controlled execution engine introduced in Day 5 is specified in
+`execution_engine.md`: the explicit tool registry, the execution
+lifecycle, the approval policy bound to task inputs, the retry and
+timeout rules, and the filesystem access boundary. It executes the Day 3
+planner's tasks through the Day 4 capabilities, and it executes nothing
+that has not been explicitly registered and approved.
 
 ## 4. Data flow (typical execution)
 

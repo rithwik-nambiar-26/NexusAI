@@ -35,6 +35,7 @@ class ExtractionStatus(StrEnum):
     OK = "ok"
     EMPTY = "empty"
     UNSUPPORTED_FORMAT = "unsupported_format"
+    PATH_NOT_ALLOWED = "path_not_allowed"
     CORRUPTED = "corrupted"
     FAILED = "failed"
 
