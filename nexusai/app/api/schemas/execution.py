@@ -32,6 +32,9 @@ class ExecutePlanResponse(BaseModel):
 
     report: ExecutionReport
     request_id: str = Field(..., description="Correlation ID for this request")
+    run_id: int | None = Field(
+        default=None, description="Identifier of the persisted workflow run, if any"
+    )
 
 
 class ApprovalDecisionRequest(BaseModel):

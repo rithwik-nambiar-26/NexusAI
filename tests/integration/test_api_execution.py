@@ -50,9 +50,17 @@ def test_tools_endpoint(client: TestClient):
     response = client.get("/api/v1/execution/tools")
     assert response.status_code == 200
     data = response.json()
-    assert data["count"] == 3
     capabilities = {tool["capability"] for tool in data["tools"]}
-    assert capabilities == {"document.read", "document.extract", "llm.summarise"}
+    assert data["count"] == len(data["tools"])
+    # The three Day 4 document capabilities and the two data capabilities
+    # are always registered.
+    assert {
+        "document.read",
+        "document.extract",
+        "llm.summarise",
+        "data.load",
+        "data.analyse",
+    } <= capabilities
 
     for tool in data["tools"]:
         assert tool["requires_approval"] is False

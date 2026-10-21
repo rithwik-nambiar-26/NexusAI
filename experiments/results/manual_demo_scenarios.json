@@ -1,0 +1,270 @@
+[
+  {
+    "id": "S1",
+    "input": "Summarise the uploaded meeting notes and list the important decisions.",
+    "intent": "document_transformation",
+    "confidence": 0.2197265673199441,
+    "classification_status": "clarification_required",
+    "plan_status": "ready",
+    "capabilities": [
+      "document.read",
+      "document.transform",
+      "filesystem.write",
+      "verify.content"
+    ],
+    "requires_approval": true,
+    "missing_information": [
+      "No source document was referenced; the plan needs a document path."
+    ],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "blocked",
+    "task_results": [
+      {
+        "capability": "document.read",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "document.transform",
+        "status": "skipped",
+        "error": "Capability 'document.transform' is not registered"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_6bf8e7fa' did not complete"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_b56b96e8' did not complete"
+      }
+    ]
+  },
+  {
+    "id": "S2",
+    "input": "Read the uploaded product manual and tell me the installation requirements.",
+    "intent": "document_question_answering",
+    "confidence": 0.22085927028881452,
+    "classification_status": "clarification_required",
+    "plan_status": "ready",
+    "capabilities": [
+      "document.extract",
+      "document.read",
+      "verify.content"
+    ],
+    "requires_approval": false,
+    "missing_information": [
+      "No source document was referenced; the plan needs a document path."
+    ],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "partially_completed",
+    "task_results": [
+      {
+        "capability": "document.read",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "document.extract",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "verify.content",
+        "status": "skipped",
+        "error": "Capability 'verify.content' is not registered"
+      }
+    ]
+  },
+  {
+    "id": "S3",
+    "input": "Analyse sales_2026.csv and identify the region with the highest revenue.",
+    "intent": "data_analysis",
+    "confidence": 0.5070307193732968,
+    "classification_status": "low_confidence",
+    "plan_status": "ready",
+    "capabilities": [
+      "data.aggregate",
+      "data.analyse",
+      "data.export",
+      "data.load",
+      "verify.calculation"
+    ],
+    "requires_approval": false,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "blocked",
+    "task_results": [
+      {
+        "capability": "data.load",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "data.analyse",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "data.aggregate",
+        "status": "skipped",
+        "error": "Capability 'data.aggregate' is not registered"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_e7c0f860' did not complete"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_35a6c79f' did not complete"
+      }
+    ]
+  },
+  {
+    "id": "S4",
+    "input": "Find the top five products by revenue in sales_2026.csv.",
+    "intent": "data_analysis",
+    "confidence": 0.5095675503216502,
+    "classification_status": "low_confidence",
+    "plan_status": "ready",
+    "capabilities": [
+      "data.aggregate",
+      "data.analyse",
+      "data.export",
+      "data.load",
+      "verify.calculation"
+    ],
+    "requires_approval": false,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "blocked",
+    "task_results": [
+      {
+        "capability": "data.load",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "data.analyse",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "data.aggregate",
+        "status": "skipped",
+        "error": "Capability 'data.aggregate' is not registered"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_893f3ff0' did not complete"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_185d7b0f' did not complete"
+      }
+    ]
+  },
+  {
+    "id": "S5",
+    "input": "Explain the important information in the uploaded documents.",
+    "intent": "document_question_answering",
+    "confidence": 0.3937648420778036,
+    "classification_status": "low_confidence",
+    "plan_status": "ready",
+    "capabilities": [
+      "document.extract",
+      "document.read",
+      "verify.content"
+    ],
+    "requires_approval": false,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "partially_completed",
+    "task_results": [
+      {
+        "capability": "document.read",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "document.extract",
+        "status": "completed",
+        "error": null
+      },
+      {
+        "capability": "verify.content",
+        "status": "skipped",
+        "error": "Capability 'verify.content' is not registered"
+      }
+    ]
+  },
+  {
+    "id": "S6",
+    "input": "Send the report to the client.",
+    "intent": "communication",
+    "confidence": 0.4244426919065212,
+    "classification_status": "low_confidence",
+    "plan_status": "ready",
+    "capabilities": [
+      "communication.draft",
+      "communication.send"
+    ],
+    "requires_approval": true,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": false,
+    "execution_status": "blocked",
+    "task_results": [
+      {
+        "capability": "communication.draft",
+        "status": "skipped",
+        "error": "Capability 'communication.draft' is not registered"
+      },
+      {
+        "capability": null,
+        "status": "blocked",
+        "error": "Blocked: dependency 'task_e3ed304b' did not complete"
+      }
+    ]
+  },
+  {
+    "id": "S7",
+    "input": "Delete all files in the project folder.",
+    "intent": "destructive_operation",
+    "confidence": 0.4513876523780028,
+    "classification_status": "low_confidence",
+    "plan_status": "invalid",
+    "capabilities": [],
+    "requires_approval": true,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": true,
+    "execution_status": "invalid",
+    "task_results": []
+  },
+  {
+    "id": "S8",
+    "input": "Book me a flight to London tomorrow.",
+    "intent": "infeasible",
+    "confidence": 0.30637483714198005,
+    "classification_status": "clarification_required",
+    "plan_status": "invalid",
+    "capabilities": [],
+    "requires_approval": false,
+    "missing_information": [],
+    "unsupported_operations": [],
+    "clarification_required": true,
+    "execution_status": "invalid",
+    "task_results": []
+  }
+]

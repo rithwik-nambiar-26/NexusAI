@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover
     raise SystemExit("streamlit is not installed") from None
 
 from nexusai.app.ui.config import (
+    API_BASE_URL,
     APP_NAME,
     APP_VERSION,
     PAGES,
@@ -75,8 +76,11 @@ def main() -> None:
         )
         st.divider()
         st.markdown(
-            "Status: **engineering foundation (Day 1)** &middot; AI agent subsystems in Days 2–7"
+            "Status: **Days 1–5 complete** &middot; "
+            "intent classification, planning, documents, execution &middot; "
+            "Day 6 verification pending"
         )
+        st.caption(f"Backend: `{API_BASE_URL}`")
 
     # Handle test framework quirk: widget may be initialized with label as value
     # before our session_state takes effect. Fall back to first page.

@@ -15,6 +15,14 @@ APP_NAME = "NexusAI"
 APP_VERSION = "0.1.0"
 TAGLINE = "AI-Powered Personal Task Automation"
 
+#: Timeout for a single backend call, in seconds.
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("NEXUSAI_API_TIMEOUT", "30"))
+
+#: Where uploaded files are written before the backend ingests them.
+#: This must sit inside the backend's allowed document roots so the same
+#: PathPolicy governs an upload as any other read.
+UPLOAD_DIR = os.getenv("NEXUSAI_UPLOAD_DIR", "./data/uploads")
+
 PAGES = [
     ("Overview", "overview"),
     ("Task Automation", "task_automation"),

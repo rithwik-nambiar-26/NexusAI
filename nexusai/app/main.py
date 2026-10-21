@@ -26,6 +26,7 @@ from nexusai.app.core.exceptions import register_exception_handlers
 from nexusai.app.core.logging import configure_from_settings
 from nexusai.app.core.middleware import RequestContextMiddleware
 from nexusai.app.db.session import build_engine_and_schema, set_global_engine
+from nexusai.app.execution.csv_tool import register_csv_tool
 from nexusai.app.execution.engine import ExecutionEngine
 from nexusai.app.execution.registry import ToolRegistry
 from nexusai.app.execution.tools import register_document_tools
@@ -98,7 +99,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # populated with the Day 4 document capabilities, so a planner task
     # binds without a translation layer.
     tool_registry = ToolRegistry()
-    execution_engine = ExecutionEngine(tool_registry)
+
+    def _indexed_document_ids() -> list[str]:
+        """Return the ids of the documents the application has indexed."""
+        if document_service is None:
+            return []
+        return [document.document_id for document in document_service.documents()]
+
+    execution_engine = ExecutionEngine(
+        tool_registry,
+        document_id_provider=_indexed_document_ids,
+    )
     if document_service is not None:
         try:
             register_document_tools(
@@ -110,6 +121,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "failed to register the document tools; the executor will have "
                 "no registered capabilities"
             )
+    try:
+        # The CSV analysis tool reads under the same filesystem policy as
+        # every other capability.
+        register_csv_tool(tool_registry, path_policy)
+    except Exception:
+        logging.getLogger("nexusai.app.main").exception(
+            "failed to register the CSV analysis tool"
+        )
 
     app = FastAPI(
         title=settings.app_name,

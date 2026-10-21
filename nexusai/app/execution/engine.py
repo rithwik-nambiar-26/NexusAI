@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -156,9 +157,14 @@ class ExecutionEngine:
         self,
         registry: ToolRegistry,
         max_attempts_override: int | None = None,
+        document_id_provider: Callable[[], list[str]] | None = None,
     ) -> None:
         self._registry = registry
         self._max_attempts_override = max_attempts_override
+        # Supplies the ids of the documents currently indexed. The
+        # application sets this so the engine and the document service
+        # always agree on what is indexed.
+        self._document_id_provider = document_id_provider
         # Tasks that have already run, so a second execution of the same
         # plan does not repeat a side effect.
         self._completed: dict[str, str] = {}
@@ -368,7 +374,12 @@ class ExecutionEngine:
             return result
 
         # --- input preparation ------------------------------------------
-        payload = self._payload_for(task, tool, plan.original_request)
+        payload = self._payload_for(
+            task,
+            tool,
+            plan.original_request,
+            self._indexed_document_ids(),
+        )
 
         try:
             validated_input = tool.validate_input(payload)
@@ -455,6 +466,21 @@ class ExecutionEngine:
         task.error = str(last_error)
         return result
 
+    def _indexed_document_ids(self) -> list[str]:
+        """Return the ids of the documents currently indexed.
+
+        Used to resolve a request that refers to a document without
+        naming a file. The list comes from the document service the
+        application is using, so the engine and the service always agree
+        on what is indexed.
+        """
+        if self._document_id_provider is None:
+            return []
+        try:
+            return list(self._document_id_provider())
+        except Exception:
+            return []
+
     def _dependency_state(
         self,
         task: Task,
@@ -498,6 +524,7 @@ class ExecutionEngine:
         task: Task,
         tool: ToolDefinition,
         request: str = "",
+        indexed_documents: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build the tool input payload from a task's parameters.
 
@@ -512,7 +539,9 @@ class ExecutionEngine:
             if parameter.name in known:
                 payload[parameter.name] = parameter.value
 
-        return derive_tool_inputs(tool.capability, request, payload)
+        return derive_tool_inputs(
+            tool.capability, request, payload, indexed_documents
+        )
 
     def _resolve_approval(
         self,

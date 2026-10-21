@@ -11,6 +11,10 @@ say so rather than pretending otherwise.
 
 from __future__ import annotations
 
+import contextlib
+import json
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
@@ -73,14 +77,62 @@ def execute_plan(
     report = engine.execute(plan, approvals=payload.approvals)
 
     # The report is kept on the application state so the approval endpoint
-    # can act on it. This is in-memory only: execution history is not
-    # persisted.
+    # can act on it.
     request.app.state.last_execution_report = report
+
+    # The report is also persisted as a workflow run, so the run history
+    # shows what actually happened rather than an empty table.
+    run_id = _persist_report(request, plan, report)
 
     return ExecutePlanResponse(
         report=report,
         request_id=get_request_id(),
+        run_id=run_id,
     )
+
+
+def _persist_report(request: Request, plan: Plan, report) -> int | None:
+    """Persist an execution report as a workflow run.
+
+    Returns:
+        The identifier of the created run, or None when the database is
+        unavailable.
+    """
+    from nexusai.app.db.session import get_db
+    from nexusai.app.services.workflow import WorkflowService
+
+    try:
+        session_generator = get_db(request)
+        session = next(session_generator)
+    except Exception:
+        return None
+
+    try:
+        service = WorkflowService(session)
+        run = service.create_run(
+            goal=plan.original_request,
+            intent=plan.intent,
+            status=report.status.value,
+            plan=json.dumps(
+                {
+                    "plan_id": plan.plan_id,
+                    "execution_id": report.execution_id,
+                    "tasks": [task.model_dump(mode="json") for task in plan.tasks],
+                    "execution_order": plan.execution_order,
+                },
+                default=str,
+            ),
+        )
+        service.commit()
+        return run.id
+    except Exception:
+        logging.getLogger("nexusai.app.api.routes.execution").exception(
+            "failed to persist the execution report"
+        )
+        return None
+    finally:
+        with contextlib.suppress(Exception):
+            session_generator.close()  # type: ignore[union-attr]
 
 
 @router.post(

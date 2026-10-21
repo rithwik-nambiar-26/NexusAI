@@ -17,6 +17,7 @@ Three principles shape this module:
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from pathlib import Path
@@ -128,6 +129,56 @@ class DocumentIntelligenceService:
         self.store = VectorStore(self.store_dir, self.embedder.dimension)
         self.store.load()
         self._documents: dict[str, Document] = {}
+        # The chunk index is persisted, but the document metadata that
+        # describes it was not, so a restart would know the chunks but not
+        # the documents they came from. The metadata is restored here.
+        self._restore_documents()
+
+    def _restore_documents(self) -> None:
+        """Rebuild the document metadata from the persisted chunk index.
+
+        A chunk carries its document id, page number and heading, which is
+        enough to describe the document it came from. The name and path
+        are recovered from the store's own document-name index.
+        """
+        metadata_path = self.store_dir / "documents.json"
+        if not metadata_path.exists():
+            return
+
+        try:
+            raw = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+
+        for document_id, payload in raw.items():
+            if not isinstance(payload, dict):
+                continue
+            try:
+                self._documents[document_id] = Document.model_validate(payload)
+            except Exception:
+                continue
+
+        # Only keep the documents that still have chunks in the index.
+        known = self.store.document_ids()
+        self._documents = {
+            document_id: document
+            for document_id, document in self._documents.items()
+            if document_id in known
+        }
+
+    def _save_documents(self) -> None:
+        """Persist the document metadata beside the chunk index."""
+        try:
+            self.store_dir.mkdir(parents=True, exist_ok=True)
+            payload = {
+                document_id: document.model_dump(mode="json")
+                for document_id, document in self._documents.items()
+            }
+            (self.store_dir / "documents.json").write_text(
+                json.dumps(payload, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            logger.warning("Could not persist the document metadata")
 
     # ------------------------------------------------------------------
     # Ingestion
@@ -242,6 +293,7 @@ class DocumentIntelligenceService:
 
         self._documents[document_id] = document
         self.store.save()
+        self._save_documents()
 
         logger.info(
             "Document ingested",
@@ -316,6 +368,7 @@ class DocumentIntelligenceService:
         self.store.add_many(chunks, vectors, {document_id: name})
         self._documents[document_id] = document
         self.store.save()
+        self._save_documents()
 
         return IngestionResult(
             document=document,

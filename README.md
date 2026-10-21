@@ -1,7 +1,7 @@
 # NexusAI
 
 **Working title:** NexusAI: AI-Powered Personal Task Automation  
-**Status:** Phase 1 — Days 1–5 implemented (scaffolding, intent classification, structured planning, document intelligence, controlled execution)  
+**Status:** Phase 1 — Days 1–5 implemented (scaffolding, intent classification, structured planning, document intelligence, controlled execution), with the Day 5.5 Streamlit review interface  
 **MSc Data Science project**  
 **Second Review:** 23–25 October 2026
 
@@ -224,7 +224,11 @@ NexusAI/
 │   ├── sample/                 # Sample documents (versioned)
 │   └── raw/processed/          # Local-only (gitignored)
 ├── artifacts/                  # Model weights, vector stores (gitignored)
-├── docs/                       # Research, architecture, project management
+├── docs/
+│   ├── review/                 # Second Review preparation (Day 5.5)
+│   ├── research/               # Research foundation
+│   ├── architecture/            # Architecture and design documents
+│   └── project_management/      # Plans, traceability, checkpoints
 │   ├── research/               # 11 research documents
 │   ├── architecture/           # System overview, decisions
 │   └── project_management/     # Plans, traceability, checkpoints
@@ -290,7 +294,8 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 - ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
 - ✅ **Document intelligence** — PDF/DOCX/TXT/Markdown ingestion, normalisation and chunking with stable ids, local embedding, a numpy-backed local vector index, retrieval with source references, and grounded question answering and summarisation with an explicit insufficient-evidence response
 - ✅ **Controlled execution** — explicit tool registry with Pydantic input/output schemas, dependency-ordered execution, approval enforced by the executor and bound to the task's inputs, bounded retries, and a filesystem access policy that confines reads to configured roots
-- ✅ 526 passing tests (unit, integration, e2e, UI smoke)
+- ✅ **Streamlit review interface** — six live pages driving the backend over HTTP: task workspace (classify, plan, execute), document intelligence (upload, ingest, retrieve, answer, summarise), data intelligence (CSV profiling and aggregation), run history, and system status
+- ✅ 527 passing tests (unit, integration, e2e, UI smoke)
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 

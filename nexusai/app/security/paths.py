@@ -58,7 +58,9 @@ class PathResolutionStatus(StrEnum):
     NOT_READABLE = "not_readable"
 
 
-#: File extensions NexusAI is able to extract.
+#: File extensions NexusAI is able to read. The document extractors cover
+#: the first four; the tabular extensions are read by the CSV analysis
+#: tool.
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
     {
         ".pdf",
@@ -67,6 +69,8 @@ ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
         ".text",
         ".md",
         ".markdown",
+        ".csv",
+        ".tsv",
     }
 )
 
@@ -129,6 +133,26 @@ class PathPolicy:
                 continue
         return False
 
+    def _find_under_roots(self, name: str) -> Path | None:
+        """Find a file with the given name under one of the allowed roots.
+
+        The search is recursive but bounded to the allowed roots, so a
+        match is always inside an allowed root. The first match in root
+        order wins; a shallow directory is walked before a deep one so
+        the closest match is preferred.
+        """
+        for root in self.roots:
+            if not root.is_dir():
+                continue
+            # Prefer the shallowest match so the nearest file wins.
+            matches = sorted(
+                (path for path in root.rglob(name) if path.is_file()),
+                key=lambda path: (len(path.relative_to(root).parts), str(path)),
+            )
+            if matches:
+                return matches[0]
+        return None
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -150,19 +174,29 @@ class PathPolicy:
         raw = Path(path)
 
         if not raw.is_absolute():
-            # A relative path is interpreted against the base directory —
-            # the project root by default — so a caller writing
-            # ``data/sample/file.md`` means what they expect. The result
-            # is still checked against the allowed roots, so this does not
-            # widen what may be read.
-            if self.base_dir is not None:
-                raw = self.base_dir / raw
-            elif self.roots:
-                raw = self.roots[0] / raw
-            else:
-                raise PathOutsideRootError(
-                    "No allowed document root is configured.", code="no_roots"
-                )
+            # A bare file name such as ``sales_2026.csv`` names a file
+            # without saying where it is. It is looked for under each
+            # allowed root. This never widens what may be read: a
+            # candidate is only accepted when it is inside a root.
+            is_bare_name = len(raw.parts) == 1
+            if is_bare_name:
+                found = self._find_under_roots(raw.name)
+                if found is not None:
+                    raw = found
+
+            if not raw.is_absolute():
+                # Otherwise a relative path is interpreted against the base
+                # directory — the project root by default — so a caller
+                # writing ``data/sample/file.md`` means what they expect.
+                # The result is still checked against the allowed roots.
+                if self.base_dir is not None:
+                    raw = self.base_dir / raw
+                elif self.roots:
+                    raw = self.roots[0] / raw
+                else:
+                    raise PathOutsideRootError(
+                        "No allowed document root is configured.", code="no_roots"
+                    )
 
         canonical = self._canonicalise(raw)
         if canonical is None:

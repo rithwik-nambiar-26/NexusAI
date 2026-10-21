@@ -1,4 +1,4 @@
-"""Overview page: project identity, objectives and honest status."""
+"""Overview page: what NexusAI is and what is actually implemented."""
 
 from __future__ import annotations
 
@@ -7,87 +7,113 @@ try:
 except ImportError:  # pragma: no cover
     st = None  # type: ignore[assignment]
 
-from nexusai.app.ui.config import APP_NAME, APP_VERSION, TAGLINE, page_config
+from nexusai.app.ui import api_client
+from nexusai.app.ui.components import require_backend, show_api_error
+from nexusai.app.ui.config import API_BASE_URL
 
+#: Objectives and the phase that implements them.
+OBJECTIVES = [
+    ("O1", "Interpret natural-language goals and classify task intent", "Days 2 & 2.2"),
+    ("O2", "Decompose goals into executable, dependency-aware steps", "Day 3"),
+    ("O3", "Retrieve relevant information from user-provided documents", "Day 4"),
+    ("O4", "Secure tool execution with registered tools and validated inputs", "Day 5"),
+    ("O5", "Verification, bounded retries, failure handling, replanning", "Not started"),
+    ("O6", "Evaluate with measurable metrics", "Not started"),
+]
 
-def _not_implemented_box(feature: str, day: str | None = None) -> None:
-    """Render an honest placeholder for unimplemented functionality."""
-    if st is None:
-        return
-    detail = f"Scheduled for {day}." if day else "Not yet implemented."
-    st.info(
-        f"**{feature}** — {detail}",
-        icon="📌",
-    )
+#: What the running system can actually do today.
+IMPLEMENTED = [
+    "Intent classification over a 12-class taxonomy (ML classifier)",
+    "Structured planning with typed tasks and a dependency graph",
+    "Document ingestion for PDF, DOCX, TXT and Markdown",
+    "Local retrieval with traceable source references",
+    "Grounded question answering and summarisation with citations",
+    "An explicit tool registry with input and output schema validation",
+    "Controlled execution with approval bound to task inputs",
+    "CSV profiling and group-by aggregation",
+]
+
+#: What exists in the design but is not built yet.
+NOT_YET = [
+    "Independent verification of a result (O5) — planned for Day 6",
+    "Adaptive replanning after a failure (O5) — planned for Day 6",
+    "The execution report generator (O5/O6) — planned for Day 7",
+    "The experiment harness and the A/B/C comparative evaluation (O6) — planned for Day 7",
+    "A local LLM planning or answering backend — optional by design",
+]
 
 
 def render() -> None:
+    """Render the Overview page."""
     if st is None:
         raise RuntimeError("streamlit is required to render the UI")
-    page_config()
 
-    st.title(f"{APP_NAME} v{APP_VERSION}")
-    st.caption(TAGLINE)
+    st.title("Overview")
+    st.caption(
+        "NexusAI decomposes a natural-language request into a validated plan and "
+        "executes the parts it has registered tools for."
+    )
 
-    st.subheader("About")
+    st.divider()
+
+    st.subheader("What it does")
     st.write(
-        "NexusAI is an AI-powered personal task automation platform that "
-        "transforms natural-language goals into structured, executable, "
-        "verifiable and adaptive workflows. It interprets user intentions, "
-        "decomposes goals into smaller tasks, identifies suitable tools, "
-        "executes approved operations, verifies outcomes, recovers from "
-        "failures and produces a transparent execution report."
+        "NexusAI is an AI-powered personal task automation platform. It "
+        "classifies the intent of a request, decomposes it into a typed plan "
+        "with an explicit dependency graph, and executes the tasks whose "
+        "capabilities are registered — refusing to run anything that has not "
+        "been registered or approved."
+    )
+
+    st.subheader("Research question")
+    st.info(
+        '"Can an AI-driven workflow engine autonomously decompose, execute, '
+        'verify and adapt multi-step everyday tasks using heterogeneous '
+        'real-time information?"'
+    )
+    st.caption(
+        "This is the hypothesis under investigation, not an established result. "
+        "The comparative evaluation of the rule-based, LLM-only and hybrid "
+        "conditions is not complete."
     )
 
     st.subheader("Research objectives")
-    objectives = [
-        "O1 — Interpret natural-language user goals and classify task intent.",
-        "O2 — Decompose goals into executable, dependency-aware steps.",
-        "O3 — Integrate RAG over user-provided documents.",
-        "O4 — Secure tool execution with registered tools and validated inputs.",
-        "O5 — Execution verification, bounded retries, failure handling, adaptive replanning.",
-        "O6 — Evaluate with measurable completion, quality, accuracy and recovery metrics.",
-    ]
-    for objective in objectives:
-        st.markdown(f"- {objective}")
-
-    st.subheader("Architecture")
-    st.write(
-        "Components: goal intake, intent router, planner, RAG module, tool "
-        "registry, executor, verifier, replanner and report generator. See "
-        "`docs/architecture/system_overview.md`."
+    st.dataframe(
+        [
+            {"id": oid, "objective": text, "phase": phase}
+            for oid, text, phase in OBJECTIVES
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
 
     st.divider()
-    st.subheader("Implemented today (Day 1)")
-    st.markdown(
-        "- Python project configuration (`pyproject.toml`, `ruff`, `pytest`)\n"
-        "- FastAPI backend with health, system status and workflow-run APIs\n"
-        "- SQLite persistence (workflow runs + execution steps)\n"
-        "- Streamlit application shell (this page)\n"
-        "- Structured logging with request-correlation IDs\n"
-        "- Centralised Pydantic settings; `.env` never committed\n"
-        "- Initial test suite\n"
-    )
+
+    st.subheader("Implemented and tested")
+    for item in IMPLEMENTED:
+        st.markdown(f"- ✅ {item}")
+
+    st.subheader("Not yet implemented")
+    for item in NOT_YET:
+        st.markdown(f"- ⏳ {item}")
 
     st.divider()
-    st.subheader("Coming in Phase 1 (Days 2-7)")
-    st.markdown(
-        "- Day 2 — Intent router (classifier + LLM fallback)\n"
-        "- Day 3 — Structured planner (schema + dependencies)\n"
-        "- Day 4 — RAG module (index + cited passages)\n"
-        "- Day 5 — Tool registry + executor (validation + approval gates)\n"
-        "- Day 6 — Verifier + bounded replanner\n"
-        "- Day 7 — Report generator, experiment harness, first evaluation pass\n"
-    )
+    st.subheader("System")
+    if require_backend():
+        try:
+            status = api_client.system_status()
+            tools = api_client.list_execution_tools()
+        except api_client.ApiError as error:
+            show_api_error(error)
+            return
 
-    st.divider()
-    st.subheader("Second review")
-    st.write(
-        "College Second Review: 23–25 October 2026. Evidence tracked in "
-        "`docs/project_management/review_readiness_matrix.md`."
-    )
-
-
-if __name__ == "__main__":  # pragma: no cover
-    render()
+        columns = st.columns(3)
+        columns[0].metric("Backend", API_BASE_URL)
+        columns[1].metric("Version", status.get("version", "-"))
+        columns[2].metric(
+            "Registered capabilities", (tools or {}).get("count", 0)
+        )
+        st.caption(
+            "Phase 1, Days 1–5 complete. Day 6 (independent verification and "
+            "adaptive recovery) and Day 7 (experiment harness) are not started."
+        )

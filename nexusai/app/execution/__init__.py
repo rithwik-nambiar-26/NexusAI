@@ -6,6 +6,8 @@ This package turns a validated plan into executed tasks:
   explicitly registered capabilities can be executed.
 * :mod:`nexusai.app.execution.tools` — adapters that register the Day 4
   document capabilities under the planner's capability names.
+* :mod:`nexusai.app.execution.csv_tool` — the read-only CSV analysis
+  capability, registered under the planner's data capability names.
 * :mod:`nexusai.app.execution.engine` — the execution engine, which
   enforces dependency order, approval state, timeouts and bounded retries.
 
@@ -13,6 +15,13 @@ The engine plans and executes; it does not verify the correctness of a
 result. Verification is the Day 6 verifier's job.
 """
 
+from nexusai.app.execution.csv_tool import (
+    CSV_CAPABILITIES,
+    CsvAnalyseInput,
+    CsvAnalyseOutput,
+    analyse_csv,
+    register_csv_tool,
+)
 from nexusai.app.execution.engine import (
     ApprovalRequest,
     ApprovalState,
@@ -39,9 +48,12 @@ from nexusai.app.execution.tools import (
 )
 
 __all__ = [
+    "CSV_CAPABILITIES",
     "DOCUMENT_CAPABILITIES",
     "ApprovalRequest",
     "ApprovalState",
+    "CsvAnalyseInput",
+    "CsvAnalyseOutput",
     "ExecutionEngine",
     "ExecutionReport",
     "ExecutionStatus",
@@ -54,7 +66,9 @@ __all__ = [
     "ToolPermission",
     "ToolRegistry",
     "ToolRisk",
+    "analyse_csv",
     "get_registry",
+    "register_csv_tool",
     "register_document_tools",
     "reset_registry",
 ]
