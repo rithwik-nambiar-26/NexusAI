@@ -28,15 +28,19 @@ Records significant architectural decisions, the alternatives considered, the ra
 | AD-14 | NetworkX for dependency graph construction, cycle detection and topological ordering | Accepted (Day 3) | Mature, open-source graph library; correct directed-cycle semantics (`simple_cycles`, not the undirected `cycle_basis`) | One more dependency, kept within the open-source constraint | O2 |
 | AD-15 | Planning is not authorization: approval-gated task types are flagged, never executed | Accepted (Day 3) | Keeps the safety decision with the executor (Day 5) rather than the planner; a destructive request produces no executable plan at all | The executor must honour `requires_approval`; enforcement is Day 5 work | O4, O5 |
 | AD-16 | Plan persistence deferred beyond Day 3 | Accepted (Day 3) | Planning is a pure function of its input in Day 3, which makes it fully testable; the Day 1 schema already supports runs and steps | Plans are not retrievable after the response; retrieval endpoints report this honestly | O2 |
+| AD-17 | numpy-backed local vector index instead of ChromaDB | Accepted (Day 4) | ChromaDB was installed and evaluated: it pulls in a large dependency tree (OpenTelemetry, Kubernetes, OAuth) for functionality not yet needed, ships an `anonymized_telemetry` module that conflicts with the local-first requirement, and its installation changed unrelated packages. A numpy index is ~100 lines, deterministic, inspectable and keeps the dependency surface small | The index is single-process and in-memory; a much larger corpus would need a different backend | O3 |
+| AD-18 | Extractive answers and summaries, with an explicit insufficient-evidence outcome | Accepted (Day 4) | Every claim can be checked against the source; no generative model is required, so the pipeline is testable offline. A generative backend can be added behind the same service interface | Less fluent output than a generative summary; lexical matching can miss paraphrases | O3, O5 |
+| AD-19 | Hashing embedder as the default, Sentence Transformers opt-in | Accepted (Day 4) | The whole pipeline works with no model files and no network, which keeps the test suite deterministic; the local model is available for better semantic matching | The hashing embedder matches on lexical overlap, so paraphrases are weaker matches | O3 |
 
 ## 3. Decisions pending (Phase 1)
 
-- RAG embedding model and chunking strategy (bounded by hardware-aware constraint).
+- RAG embedding model and chunking strategy — settled in Day 4: chunking packs paragraphs into 800-character windows with 100-character overlap; the hashing embedder is the default and Sentence Transformers is opt-in (AD-19).
 - Plan schema serialisation and step type vocabulary — partly settled in Day 3: the vocabulary is the `TaskType` enum and the plan serialises through Pydantic (JSON).
 - Tool registry format and schema language (JSON Schema vs. Pydantic vs. dataclasses).
 - Verification criterion language (per-step expected-outcome templates vs. LLM-based checker).
 - Local UI: terminal/CLI vs. minimal local interface.
 - Whether the Day 2 intent taxonomy is extended or merged, pending more labelled data.
+- Whether the document service should be given a generative (LLM) answer backend, and if so which local model.
 
 Each pending decision will be recorded here with rationale before implementation.
 

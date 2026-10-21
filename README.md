@@ -1,7 +1,7 @@
 # NexusAI
 
 **Working title:** NexusAI: AI-Powered Personal Task Automation  
-**Status:** Phase 1 — Days 1–3 implemented (scaffolding, intent classification, structured planning)  
+**Status:** Phase 1 — Days 1–4 implemented (scaffolding, intent classification, structured planning, document intelligence)  
 **MSc Data Science project**  
 **Second Review:** 23–25 October 2026
 
@@ -120,6 +120,13 @@ With the FastAPI server running (`python -m nexusai serve`):
 | GET | `/api/v1/intent/status` | Intent classifier availability |
 | POST | `/api/v1/planner/plan` | Create a structured execution plan |
 | GET | `/api/v1/planner/status` | Planner availability |
+| POST | `/api/v1/documents/ingest` | Ingest a PDF, DOCX, TXT or Markdown document |
+| POST | `/api/v1/documents/ingest-text` | Ingest text supplied in the request |
+| GET | `/api/v1/documents` | List the indexed documents |
+| POST | `/api/v1/documents/retrieve` | Retrieve relevant passages with source references |
+| POST | `/api/v1/documents/answer` | Answer a question grounded in the indexed documents |
+| POST | `/api/v1/documents/summarise` | Summarise a document or the indexed corpus |
+| GET | `/api/v1/documents/capabilities` | List the planner capabilities this module satisfies |
 | POST | `/api/v1/workflows` | Create a workflow run |
 | GET | `/api/v1/workflows` | List workflow runs (paginated, filterable) |
 | GET | `/api/v1/workflows/{run_id}` | Get a workflow run with steps |
@@ -186,9 +193,16 @@ NexusAI/
 │   │       ├── schemas.py      # Plan, Task, TaskType, PlanStatus
 │   │       ├── dependencies.py # NetworkX graph resolution
 │   │       └── service.py      # Decomposition + validation
-│   ├── rag/                    # Placeholder (Day 4)
+│   ├── rag/                    # Document intelligence (Day 4)
+│   │   ├── schemas.py          # Document, Chunk, Evidence, Answer schemas
+│   │   ├── extractors.py       # PDF, DOCX, TXT, Markdown extraction
+│   │   ├── chunking.py         # Normalisation, chunking, stable ids
+│   │   ├── embeddings.py       # Hashing + Sentence Transformers embedders
+│   │   ├── store.py            # numpy-backed local vector index
+│   │   ├── service.py          # Ingestion, retrieval, grounded answers
+│   │   └── capabilities.py     # Planner capability adapter
 │   └── tools/                  # Placeholder (Day 5)
-├── tests/                      # 325 tests (unit/integration/e2e)
+├── tests/                      # 439 tests (unit/integration/e2e)
 ├── experiments/
 │   ├── scenarios/              # 18 evaluation scenarios (versioned)
 │   ├── datasets/               # Dataset documentation
@@ -232,7 +246,7 @@ All research foundation documents are in `docs/research/`:
 | **Day 2** ✅ | Intent router (classifier + taxonomy) | **Complete** |
 | **Day 2.2** ✅ | Intent classifier reliability (dataset, model comparison, thresholds) | **Complete** |
 | **Day 3** ✅ | Planner (typed plan schema, dependencies, validation) | **Complete** |
-| Day 4 | RAG module (indexing, retrieval, citations) | RAG module, evidence accuracy |
+| **Day 4** ✅ | Document intelligence (ingestion, chunking, embedding, retrieval, grounded answers) | **Complete** |
 | Day 5 | Tool registry + executor (validation, approval) | Executor, tool-selection accuracy |
 | Day 6 | Verifier + replanner (bounded retries) | Verifier/replanner, recovery metrics |
 | Day 7 | Report generator, experiment harness, first test-matrix pass | End-to-end run, preliminary metrics |
@@ -251,9 +265,9 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 
 ## Current Implementation Status
 
-### Implemented (Days 1–3)
+### Implemented (Days 1–4)
 - ✅ Python project configuration with `pyproject.toml`, `ruff`, `pytest`
-- ✅ FastAPI backend with health, system status, intent, planner and workflow-run APIs
+- ✅ FastAPI backend with health, system status, intent, planner, document and workflow-run APIs
 - ✅ SQLite persistence (WorkflowRun + ExecutionStep models with relationships)
 - ✅ Streamlit application shell with 6 pages (Overview, Task Automation, Document Intelligence, Data Intelligence, Run History, System Status)
 - ✅ Structured logging with request-correlation IDs and secret redaction
@@ -262,17 +276,17 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 - ✅ Request ID middleware (propagation + context variable)
 - ✅ **Intent classification** — TF-IDF + Logistic Regression baseline over a 12-class taxonomy, with validation-tuned thresholds, optional probability calibration, and abstention for unclear requests
 - ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
-- ✅ 325 passing tests (unit, integration, e2e, UI smoke)
+- ✅ **Document intelligence** — PDF/DOCX/TXT/Markdown ingestion, normalisation and chunking with stable ids, local embedding, a numpy-backed local vector index, retrieval with source references, and grounded question answering and summarisation with an explicit insufficient-evidence response
+- ✅ 439 passing tests (unit, integration, e2e, UI smoke)
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 
-### Planned (Days 4–7)
-- ⏳ RAG module with local corpus indexing and cited retrieval
-- ⏳ Tool registry with schema validation and user approval gates
+### Planned (Days 5–7)
+- ⏳ Tool registry with schema validation and user approval gates, and the controlled executor
 - ⏳ Independent verifier and bounded adaptive replanner
 - ⏳ Execution report generator and experiment harness
 - ⏳ First full test-matrix execution (Conditions A/B/C)
-- ⏳ LLM fallback for the intent router and an LLM planning backend behind the existing `PlanningStrategy` interface
+- ⏳ LLM fallback for the intent router, an LLM planning backend, and a generative answer backend — all behind the existing interfaces
 
 ## License
 

@@ -8,6 +8,7 @@ temporary database.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,13 +17,15 @@ from sqlalchemy.orm import sessionmaker
 from nexusai.app.api.routes.health import router as health_router
 from nexusai.app.api.routes.intent import router as intent_router
 from nexusai.app.api.routes.planner import router as planner_router
+from nexusai.app.api.routes.rag import router as rag_router
 from nexusai.app.api.routes.system import router as system_router
 from nexusai.app.api.routes.workflows import router as workflows_router
-from nexusai.app.config import Settings, get_settings
+from nexusai.app.config import REPO_ROOT, Settings, get_settings
 from nexusai.app.core.exceptions import register_exception_handlers
 from nexusai.app.core.logging import configure_from_settings
 from nexusai.app.core.middleware import RequestContextMiddleware
 from nexusai.app.db.session import build_engine_and_schema, set_global_engine
+from nexusai.rag.service import DocumentIntelligenceService
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -56,6 +59,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = None
         session_factory = None
 
+    # Build an application-scoped document intelligence service. Each
+    # application instance owns its own vector index, so a test application
+    # never reads or writes the developer's working index.
+    document_service = None
+    try:
+        store_dir = Path(settings.vector_store_dir)
+        if not store_dir.is_absolute():
+            store_dir = REPO_ROOT / store_dir
+        document_service = DocumentIntelligenceService(store_dir=store_dir)
+    except Exception:
+        logging.getLogger("nexusai.app.main").exception(
+            "failed to initialise the document intelligence service; the "
+            "document endpoints will report the service as unavailable"
+        )
+        document_service = None
+
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -75,12 +94,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {"name": "workflows", "description": "Workflow run persistence."},
             {"name": "intent", "description": "Intent classification for user requests."},
             {"name": "planner", "description": "Structured task planning and decomposition."},
+            {"name": "documents", "description": "Document ingestion, retrieval and grounded answers."},
         ],
     )
 
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory
+    app.state.document_service = document_service
 
     if settings.cors_origins:
         app.add_middleware(
@@ -103,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workflows_router)
     app.include_router(intent_router)
     app.include_router(planner_router)
+    app.include_router(rag_router)
 
     return app
 

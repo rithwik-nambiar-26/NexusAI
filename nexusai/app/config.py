@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # resolved against the repository root.
     database_url: str = "sqlite:///./data/nexusai.db"
 
+    # --- Document intelligence ---------------------------------------------
+    # Directory holding the local vector index. Relative paths are
+    # resolved against the repository root.
+    vector_store_dir: str = "./artifacts/vectors"
+
     # --- API server --------------------------------------------------------
     api_host: str = "127.0.0.1"
     api_port: int = 8000
