@@ -1,0 +1,61 @@
+{
+  "scenario_id": "SC-09",
+  "name": "Tool raises a runtime error during execution",
+  "category": "tool_execution_failure",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O4",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.4",
+    "RQ1.5"
+  ],
+  "user_input": "Fetch the contents of data/sample/product_manual.md and list its section headings.",
+  "expected_intent": "document_inspection",
+  "expected_workflow": "read_then_extract_with_failure_handling",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 4,
+    "must_include_steps": [
+      "document.read",
+      "llm.extract"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The read tool is configured to raise a runtime error on the first call within this scenario."
+  },
+  "required_tools": [
+    "document.read",
+    "llm.extract"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "fault_injection": {
+    "tool": "document.read",
+    "mode": "error_once",
+    "description": "The first invocation of document.read raises a RuntimeError; subsequent invocations succeed."
+  },
+  "expected_output_criteria": [
+    "The section headings are listed correctly.",
+    "The failed first attempt is visible in the execution report.",
+    "The retry count is recorded and is not greater than the configured budget."
+  ],
+  "failure_conditions": [
+    "The headings are listed but the first failure is missing from the execution report.",
+    "The retry count exceeds the configured budget.",
+    "The system reports success without ever having read the document."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state after a bounded retry.",
+    "planning_quality": "Plan schema valid; the extract step declares a dependency on the read step.",
+    "tool_selection_accuracy": "document.read and llm.extract are selected; no substitute tool is used to bypass the failing one without being recorded.",
+    "verification_accuracy": "Verification distinguishes 'the tool raised' from 'the tool returned an empty result'.",
+    "recovery_effectiveness": "The failed step is recovered within the budget; this is the primary measured variable for this scenario.",
+    "evidence_accuracy": "At least 80% of cited spans support the listed headings.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This scenario is the primary test of the recovery mechanism, and it is where a hybrid architecture can plausibly fail: the replanner may decide to abandon the failing tool and substitute a different one, which changes the semantics of the task while still reporting success. Recovery effectiveness must be paired with a check that the recovered step used the intended tool. Condition B has no bounded budget and may retry indefinitely, which is recorded as a timeout rather than as a recovery success."
+}

@@ -1,0 +1,61 @@
+{
+  "scenario_id": "SC-02",
+  "name": "Research, compare and recommend a product",
+  "category": "multi_step",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O2",
+    "O3",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.3",
+    "RQ1.5"
+  ],
+  "user_input": "Research three open-source text-to-speech tools, compare their licence and language support, and write a one-paragraph recommendation for a student project.",
+  "expected_intent": "research_and_recommendation",
+  "expected_workflow": "retrieve_then_compare_then_recommend",
+  "expected_plan": {
+    "min_steps": 4,
+    "max_steps": 7,
+    "must_include_steps": [
+      "web.search",
+      "web.fetch",
+      "llm.extract",
+      "llm.summarise"
+    ],
+    "must_include_dependencies": true,
+    "notes": "Comparison requires at least three retrieved sources; the recommendation step must depend on the extraction step."
+  },
+  "required_tools": [
+    "web.search",
+    "web.fetch",
+    "llm.extract",
+    "llm.summarise"
+  ],
+  "required_documents": [],
+  "expected_outcome": "success",
+  "expected_output_criteria": [
+    "At least three distinct tools are named in the comparison.",
+    "Each named tool has a licence and a language-support statement.",
+    "A single-paragraph recommendation is produced.",
+    "Every factual claim is attributed to a retrieved source."
+  ],
+  "failure_conditions": [
+    "Fewer than three tools are compared.",
+    "The recommendation is produced before the comparison is complete.",
+    "A factual claim about a tool is not supported by any retrieved passage."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with a comparison and a recommendation.",
+    "planning_quality": "Plan schema valid; the recommendation step declares a dependency on the comparison step.",
+    "tool_selection_accuracy": "web.search, web.fetch and llm.extract are each selected at least once; no unrelated tool is invoked.",
+    "verification_accuracy": "Verification confirms three distinct tools were compared and that a recommendation exists; the human label confirms both.",
+    "recovery_effectiveness": "Not applicable: no failure is injected in the base run. Recorded as null, not zero.",
+    "evidence_accuracy": "At least 80% of cited evidence spans support the claim they are attached to.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This scenario favours condition C, since it needs retrieval plus comparison plus verification. It is also the scenario where an LLM-only baseline (condition B) is most likely to produce a fluent recommendation with fabricated licence claims, so a large B-to-C gap here is expected and should be reported as a mechanism, not generalised as a universal effect. Note that condition C can also fail here by over-fragmenting the plan into too many steps or by exhausting its retry budget on flaky network fetches."
+}

@@ -1,0 +1,90 @@
+{
+  "scenario_id": "SC-06",
+  "name": "Tabular analysis request over a local CSV",
+  "category": "data_analysis",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O2",
+    "O3",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.3"
+  ],
+  "user_input": "Using data/sample/sales_2026.csv, identify the top three regions by total revenue and state which region had the highest average order value.",
+  "expected_intent": "data_analysis",
+  "expected_workflow": "load_frame_then_compute_then_report",
+  "expected_plan": {
+    "min_steps": 3,
+    "max_steps": 5,
+    "must_include_steps": [
+      "data.frame.load",
+      "data.frame.compute"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The compute step must depend on the load step, and the computed values must be verifiable against the source rows."
+  },
+  "required_tools": [
+    "data.frame.load",
+    "data.frame.compute"
+  ],
+  "required_documents": [
+    "data/sample/sales_2026.csv"
+  ],
+  "expected_outcome": "success",
+  "ground_truth": {
+    "source": "data/sample/sales_2026.csv",
+    "row_count": 26,
+    "revenue_by_region_desc": [
+      {
+        "region": "Southern",
+        "revenue": 4059.0,
+        "units": 91,
+        "average_order_value": 44.6
+      },
+      {
+        "region": "Western",
+        "revenue": 3302.0,
+        "units": 66,
+        "average_order_value": 50.03
+      },
+      {
+        "region": "Eastern",
+        "revenue": 2756.0,
+        "units": 63,
+        "average_order_value": 43.75
+      }
+    ],
+    "fourth_region": {
+      "region": "Northern",
+      "revenue": 2604.0,
+      "units": 61,
+      "average_order_value": 42.69
+    },
+    "highest_average_order_value_region": "Western",
+    "note": "Values computed from the version-controlled sample CSV at Day 1. Re-verify if the sample file changes."
+  },
+  "expected_output_criteria": [
+    "Three regions are named in descending revenue order: Southern, Western, Eastern.",
+    "The reported revenues are 4059.00, 3302.00 and 2756.00 respectively.",
+    "The region with the highest average order value is identified as Western (50.03).",
+    "Each reported figure is reproducible from the source rows."
+  ],
+  "failure_conditions": [
+    "A reported revenue figure does not match the sum of the source rows.",
+    "Fewer than three regions are reported.",
+    "The average order value is computed on the wrong column.",
+    "The analysis is performed before the file is loaded."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with three ranked regions and a stated maximum-AOV region.",
+    "planning_quality": "Plan schema valid; the compute step declares a dependency on the load step.",
+    "tool_selection_accuracy": "data.frame.load and data.frame.compute are selected; the system does not attempt LLM-based arithmetic on raw CSV text.",
+    "verification_accuracy": "Verification recomputes the aggregates independently and compares them to the reported figures.",
+    "recovery_effectiveness": "Not applicable: no failure is injected. Recorded as null, not zero.",
+    "evidence_accuracy": "Reported figures are traced to the source rows that produced them; the citation is to row ranges, not to retrieved passages.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This scenario is expected to expose a specific hybrid weakness: an LLM that computes aggregates directly over raw CSV text will produce plausible but arithmetically wrong numbers. Condition C is expected to pass only if the compute step is genuinely delegated to a deterministic tool. A rule-based baseline can pass this scenario outright, because a fixed aggregation over a fixed file is exactly what rule-based systems do well. The finding of interest is the LLM-only condition (B) failing where A succeeds."
+}

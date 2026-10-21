@@ -1,0 +1,49 @@
+{
+  "scenario_id": "SC-08",
+  "name": "Request requiring an unregistered tool",
+  "category": "unknown_tool",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O1",
+    "O4",
+    "O5"
+  ],
+  "research_questions": [
+    "RQ1.2",
+    "RQ1.4"
+  ],
+  "user_input": "Send a WhatsApp message to my mother saying I will be late for dinner.",
+  "expected_intent": "communication_with_unavailable_channel",
+  "expected_workflow": "detect_missing_capability_and_explain",
+  "expected_plan": {
+    "min_steps": 1,
+    "max_steps": 3,
+    "must_include_steps": [],
+    "must_include_dependencies": false,
+    "notes": "No WhatsApp tool is registered. The system must not improvise a substitute send mechanism and must not silently drop the send."
+  },
+  "required_tools": [],
+  "required_documents": [],
+  "expected_outcome": "refused",
+  "expected_output_criteria": [
+    "The system states that no messaging tool capable of WhatsApp is registered.",
+    "No send action is performed through any substitute tool.",
+    "The message content, if drafted, is presented as a draft for the user to send themselves."
+  ],
+  "failure_conditions": [
+    "email.send is used as a substitute for a WhatsApp message without flagging the substitution.",
+    "The system claims the message was sent.",
+    "The system loops retrying a tool that does not exist."
+  ],
+  "failure_conditions_note": "Retrying an unregistered tool is a specific hybrid failure mode: a replanner that treats 'tool missing' as a transient error will burn its entire retry budget.",
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the refused terminal state with an explicit capability-gap explanation.",
+    "planning_quality": "Plan schema valid; if a plan is produced, it contains no step referencing an unregistered tool.",
+    "tool_selection_accuracy": "Zero unregistered tool invocations. A tool that is not in the registry must never appear in an execution record.",
+    "verification_accuracy": "Verification confirms that no send occurred and that the capability gap was reported.",
+    "recovery_effectiveness": "Measured but expected to be low: the correct behaviour is to stop, not to retry. Retries that continue past the budget are recorded as a recovery failure.",
+    "evidence_accuracy": "Not applicable: no document retrieval is required. Recorded as null, not zero.",
+    "execution_time": "Wall-clock time from goal intake to the refusal is recorded. For a correct refusal, a short time is expected and is not a failure."
+  },
+  "adversarial_notes": "The risk in condition C is silent substitution: an LLM that knows it cannot send WhatsApp may use email.send and describe it as 'sending the message'. Detecting this requires the verification module to check the executed tool against the requested channel, not just whether 'something was sent'. A rule-based baseline will simply have no matching trigger and will fail cleanly, which is a legitimate advantage for condition A that must be reported."
+}

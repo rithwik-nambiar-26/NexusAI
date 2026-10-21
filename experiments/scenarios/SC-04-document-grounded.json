@@ -1,0 +1,67 @@
+{
+  "scenario_id": "SC-04",
+  "name": "Answer a question grounded in a local document",
+  "category": "document_grounded",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O3",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.3"
+  ],
+  "user_input": "According to data/sample/product_manual.md, what is the warranty period and what does it exclude?",
+  "expected_intent": "document_question_answering",
+  "expected_workflow": "retrieve_then_answer_with_citation",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 4,
+    "must_include_steps": [
+      "document.search",
+      "llm.extract"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The answer step must be preceded by a retrieval step and must carry at least one citation."
+  },
+  "required_tools": [
+    "document.search",
+    "llm.extract"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "ground_truth": {
+    "source": "data/sample/product_manual.md",
+    "warranty_period": "24-month",
+    "exclusions": [
+      "Physical damage from impact, liquid ingress, or incorrect voltage supply",
+      "Normal degradation of the particulate filter (12-month consumable replacement schedule)",
+      "Loss of data caused by a power interruption longer than 5 seconds",
+      "Any unit whose serial number has been removed or altered",
+      "Damage arising from use with a third-party power supply outside the specified output tolerance"
+    ],
+    "exclusion_count": 5
+  },
+  "expected_output_criteria": [
+    "The answer states the warranty period as 24-month.",
+    "The answer states the five documented exclusions.",
+    "At least one citation points to a passage in product_manual.md."
+  ],
+  "failure_conditions": [
+    "The warranty period contradicts the document.",
+    "The answer omits the exclusions.",
+    "The answer cites a document that is not in the corpus."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with both warranty period and exclusions present.",
+    "planning_quality": "Plan schema valid; a retrieval step precedes the answer step.",
+    "tool_selection_accuracy": "document.search and llm.extract are selected; the system does not attempt to use web.search for a local-corpus question.",
+    "verification_accuracy": "Verification confirms the answer's claims against the cited passage, and the human label agrees on the correct warranty period.",
+    "recovery_effectiveness": "Not applicable: no failure is injected. Recorded as null, not zero.",
+    "evidence_accuracy": "At least 80% of cited passages are labelled as supporting the answer.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This is the scenario most likely to expose a weakness in the hybrid design: RAG retrieval can return a lexically similar but semantically wrong passage, and the LLM can then answer confidently from it. If condition C's evidence accuracy is low here, that is a genuine finding about the architecture and must be reported as such, not explained away."
+}

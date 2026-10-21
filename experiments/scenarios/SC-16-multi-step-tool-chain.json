@@ -1,0 +1,79 @@
+{
+  "scenario_id": "SC-16",
+  "name": "Longer multi-step chain with mixed tool types",
+  "category": "multi_step",
+  "difficulty": "hard",
+  "research_objectives": [
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.3",
+    "RQ1.4",
+    "RQ1.5"
+  ],
+  "user_input": "Read data/sample/meeting_notes.md, extract every action item with an owner, write them to notes/action_items.md, and then summarise that list into a single sentence.",
+  "expected_intent": "multi_step_document_workflow",
+  "expected_workflow": "read_then_extract_then_write_then_summarise",
+  "expected_plan": {
+    "min_steps": 4,
+    "max_steps": 7,
+    "must_include_steps": [
+      "document.read",
+      "llm.extract",
+      "filesystem.write",
+      "llm.summarise"
+    ],
+    "must_include_dependencies": true,
+    "notes": "A four-step chain where each step depends on the previous. The final summary must be derived from the written file, not from the in-memory extraction, so that the write is genuinely exercised."
+  },
+  "required_tools": [
+    "document.read",
+    "llm.extract",
+    "filesystem.write",
+    "llm.summarise"
+  ],
+  "required_documents": [
+    "data/sample/meeting_notes.md"
+  ],
+  "expected_outcome": "success",
+  "ground_truth": {
+    "source": "data/sample/meeting_notes.md",
+    "action_item_count": 6,
+    "action_item_owners": [
+      "Priya Raman",
+      "Sofia Almeida",
+      "Kenji Nakamura",
+      "Grace Oyelaran",
+      "Tom Whitfield",
+      "Priya Raman"
+    ],
+    "note": "Six action items in the 'Action items' table of the sample meeting notes. Action item 1 is owned by Priya Raman and action item 6 is also owned by Priya Raman, so owner counts are: Priya Raman 2, Sofia Almeida 1, Kenji Nakamura 1, Grace Oyelaran 1, Tom Whitfield 1."
+  },
+  "expected_output_criteria": [
+    "notes/action_items.md exists and lists every action item with an owner.",
+    "The number of action items matches the source document.",
+    "The final one-sentence summary is derived from the written file.",
+    "Every step's output is verified independently."
+  ],
+  "failure_conditions": [
+    "An action item present in the source is missing from the file.",
+    "An owner is attributed that does not appear in the source.",
+    "The final summary is generated from the pre-write extraction rather than the file.",
+    "The chain is executed out of dependency order."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with the file written and the summary produced.",
+    "planning_quality": "Plan schema valid; the four steps form a linear dependency chain with no gaps.",
+    "tool_selection_accuracy": "All four tools are selected; no step is collapsed into another, and no step is skipped.",
+    "verification_accuracy": "Each of the four steps is verified; verification of the write step compares file content, not the tool's return value.",
+    "recovery_effectiveness": "Not applicable: no failure is injected in the base run. Recorded as null, not zero.",
+    "evidence_accuracy": "At least 80% of cited spans from meeting_notes.md support the extracted action items.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "Longer chains compound errors: a single mis-extracted item propagates through the write and the summary, and a hybrid system that verifies only the final output can end the run with a confidently wrong summary. A rule-based baseline with a fixed extraction pattern may produce a more accurate list on this specific document than an LLM-based extractor, which is a genuine and reportable finding about the limits of the LLM component. The scenario also tests the max_execution_steps limit, so a hybrid system that over-fragments the plan is penalised."
+}

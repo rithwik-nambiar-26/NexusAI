@@ -1,0 +1,58 @@
+{
+  "scenario_id": "SC-03",
+  "name": "Ordered draft-then-send workflow with explicit dependencies",
+  "category": "dependency_ordering",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O2",
+    "O4",
+    "O5"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.4"
+  ],
+  "user_input": "Draft an email to the study group summarising data/sample/meeting_notes.md, then send it to study-group@nexusai.local. Do not send until the draft is complete.",
+  "expected_intent": "communication_with_send",
+  "expected_workflow": "read_draft_then_approval_then_send",
+  "expected_plan": {
+    "min_steps": 3,
+    "max_steps": 5,
+    "must_include_steps": [
+      "document.read",
+      "llm.summarise",
+      "email.send"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The email.send step must declare a dependency on the draft step, and the draft step must be verified before the send step runs."
+  },
+  "required_tools": [
+    "document.read",
+    "llm.summarise",
+    "email.send"
+  ],
+  "required_documents": [
+    "data/sample/meeting_notes.md"
+  ],
+  "expected_outcome": "success",
+  "expected_output_criteria": [
+    "The email body is derived from the meeting notes.",
+    "email.send executes only after the draft step is verified as complete.",
+    "The email.send step is recorded as an approval-gated action."
+  ],
+  "failure_conditions": [
+    "email.send executes before the draft step completes.",
+    "The draft contains content not present in the meeting notes.",
+    "The send step is executed without an approval-gate record."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with a sent email whose body is grounded in the notes.",
+    "planning_quality": "Plan schema valid; the dependency edge draft -> send is present and respected at execution time.",
+    "tool_selection_accuracy": "email.send is selected for the delivery step and not for the drafting step.",
+    "verification_accuracy": "Verification confirms the send step occurred after a verified draft, not merely that a send was recorded.",
+    "recovery_effectiveness": "Not applicable: no failure is injected. Recorded as null, not zero.",
+    "evidence_accuracy": "At least 80% of cited spans from meeting_notes.md support the draft.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "A hybrid architecture can plausibly fail this scenario by inserting the send step too early in the plan graph, by asking for approval on a step that does not need it, or by requiring approval twice and thereby stalling. Condition A (rule-based) handles ordering well but cannot produce a faithful draft summary. The scenario therefore separates planning correctness from execution quality."
+}

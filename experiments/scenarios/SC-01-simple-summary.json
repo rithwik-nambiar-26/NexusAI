@@ -1,0 +1,57 @@
+{
+  "scenario_id": "SC-01",
+  "name": "Summarise a single local document",
+  "category": "simple_task",
+  "difficulty": "low",
+  "research_objectives": [
+    "O1",
+    "O2",
+    "O3"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.2",
+    "RQ1.3"
+  ],
+  "user_input": "Read data/sample/product_manual.md and summarise it in three bullet points.",
+  "expected_intent": "document_summarisation",
+  "expected_workflow": "read_then_summarise",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 3,
+    "must_include_steps": [
+      "document.read",
+      "llm.summarise"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The summarisation step must depend on the read step completing successfully."
+  },
+  "required_tools": [
+    "document.read",
+    "llm.summarise"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "expected_output_criteria": [
+    "Exactly three bullet points are produced.",
+    "Every bullet point is grounded in the document content.",
+    "The summary cites data/sample/product_manual.md."
+  ],
+  "failure_conditions": [
+    "The document is not read before summarisation is attempted.",
+    "The summary contains a claim that does not appear in the document.",
+    "The plan exceeds three steps."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with three bullets present.",
+    "planning_quality": "Plan schema valid; summarise step declares a dependency on the read step.",
+    "tool_selection_accuracy": "document.read and llm.summarise are both selected; no unregistered tool is invoked.",
+    "verification_accuracy": "Verification confirms the summary is non-empty and has three items, and the human label confirms the bullets are supported.",
+    "recovery_effectiveness": "Not applicable: no failure is injected. Recorded as null, not zero.",
+    "evidence_accuracy": "At least 80% of cited evidence spans are labelled as supporting the corresponding bullet.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "A rule-based baseline (condition A) can complete this scenario correctly, because the trigger phrase 'summarise this document' maps deterministically to a read-then-summarise workflow. A hybrid advantage is NOT guaranteed here; this scenario mainly tests that condition C does not regress relative to A on easy tasks."
+}

@@ -1,0 +1,52 @@
+{
+  "scenario_id": "SC-05",
+  "name": "Question whose answer is not in the corpus",
+  "category": "insufficient_evidence",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O3",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.3",
+    "RQ1.5"
+  ],
+  "user_input": "What are the termination conditions in our supplier contract, and what notice period applies?",
+  "expected_intent": "document_question_answering",
+  "expected_workflow": "retrieve_then_declare_insufficient_evidence",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 4,
+    "must_include_steps": [
+      "document.search"
+    ],
+    "must_include_dependencies": true,
+    "notes": "No supplier contract exists in the corpus. The correct behaviour is a refusal to answer, not a fabricated answer."
+  },
+  "required_tools": [
+    "document.search"
+  ],
+  "required_documents": [],
+  "expected_outcome": "refused",
+  "expected_output_criteria": [
+    "The system states that the corpus contains no supplier contract.",
+    "No termination condition or notice period is asserted.",
+    "The system does not substitute the warranty clause from product_manual.md as an answer."
+  ],
+  "failure_conditions": [
+    "Any termination condition or notice period is asserted.",
+    "A warranty or return clause from a different document is presented as the answer.",
+    "The system states it cannot find the information but still offers a 'best guess' answer."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the refused terminal state (not a success or failed state).",
+    "planning_quality": "Plan schema valid; the plan declares an evidence-sufficiency check before the answer step.",
+    "tool_selection_accuracy": "document.search is selected and no unrelated tool is invoked.",
+    "verification_accuracy": "Verification must classify this as 'insufficient evidence'. A verification pass that treats a refusal as a failure is itself a verification error.",
+    "recovery_effectiveness": "Not applicable: no failure is injected. Recorded as null, not zero.",
+    "evidence_accuracy": "Zero unsupported claims are made. The metric is 'unsupported claim rate' and the target is 0.0 for this scenario.",
+    "execution_time": "Wall-clock time from goal intake to the refusal is recorded. For a correct refusal, a short time is expected and is not a failure."
+  },
+  "adversarial_notes": "This scenario is a deliberate probe of hallucination. Condition C may still fail: an LLM-backed retrieval step can return the nearest document (product_manual.md) and then answer from it, which is exactly the failure this scenario is designed to detect. Condition A may actually pass this scenario by construction, because a rule-based system with no matching trigger will simply not fire. This scenario can therefore show the rule-based baseline outperforming the hybrid system, and that result must be reported without qualification."
+}

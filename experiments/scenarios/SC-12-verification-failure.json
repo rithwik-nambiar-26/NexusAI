@@ -1,0 +1,60 @@
+{
+  "scenario_id": "SC-12",
+  "name": "Tool returns a well-formed but incorrect result",
+  "category": "verification_failure",
+  "difficulty": "hard",
+  "research_objectives": [
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.5",
+    "RQ1.6"
+  ],
+  "user_input": "What warranty exclusions are listed in data/sample/product_manual.md?",
+  "expected_intent": "document_question_answering",
+  "expected_workflow": "retrieve_then_answer_with_verification",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 4,
+    "must_include_steps": [
+      "document.search",
+      "llm.extract"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The retrieval tool returns a passage from a different document. The passage is syntactically valid and semantically plausible but does not contain the answer."
+  },
+  "required_tools": [
+    "document.search",
+    "llm.extract"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "fault_injection": {
+    "tool": "document.search",
+    "mode": "wrong_evidence",
+    "description": "Returns a valid passage from data/sample/meeting_notes.md in place of the warranty section. No error is raised."
+  },
+  "expected_output_criteria": [
+    "The verification module detects that the retrieved passage does not support the question.",
+    "The run either re-retrieves or terminates in a failed/refused state.",
+    "The final answer contains no warranty claim derived from the wrong passage."
+  ],
+  "failure_conditions": [
+    "A warranty answer is produced from the substituted passage.",
+    "The run reports success without the verification step having run.",
+    "The verification step runs but its result is ignored by the executor."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with a correct answer, or reaches a failed/refused terminal state without a wrong answer. Both are acceptable outcomes; a confidently wrong answer is not.",
+    "planning_quality": "Plan schema valid; the answer step declares an expected outcome that the verification step can check.",
+    "tool_selection_accuracy": "document.search and llm.extract are selected; no tool is invoked to work around the wrong retrieval.",
+    "verification_accuracy": "This is the primary measured variable. Verification must flag the unsupported answer, and the human label must agree with the verifier's verdict.",
+    "recovery_effectiveness": "If verification fails, the run should re-retrieve within the budget; whether it recovers is recorded.",
+    "evidence_accuracy": "At least 80% of cited passages support the claim. Citations to the substituted passage count as failures here.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This is the single most important scenario in the suite, because it isolates the contribution that distinguishes the hybrid architecture from the others: verification that is independent of the planner and that operates on a plausibly wrong result. If condition C cannot detect this substitution, the central claim of the project is not supported, and that must be reported plainly. Note also that an LLM-based verifier may be over-trusting and accept the wrong passage, which is a genuine architectural weakness rather than an implementation bug."
+}

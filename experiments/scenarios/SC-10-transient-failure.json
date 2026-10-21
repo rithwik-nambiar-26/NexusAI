@@ -1,0 +1,66 @@
+{
+  "scenario_id": "SC-10",
+  "name": "Transient failure that succeeds on retry",
+  "category": "transient_failure",
+  "difficulty": "medium",
+  "research_objectives": [
+    "O4",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.4",
+    "RQ1.5"
+  ],
+  "user_input": "Look up the warranty exclusions in data/sample/product_manual.md and list them.",
+  "expected_intent": "document_question_answering",
+  "expected_workflow": "retrieve_then_answer_with_retry",
+  "expected_plan": {
+    "min_steps": 2,
+    "max_steps": 4,
+    "must_include_steps": [
+      "document.search",
+      "llm.extract"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The search tool times out on the first call and succeeds on the second."
+  },
+  "required_tools": [
+    "document.search",
+    "llm.extract"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "ground_truth": {
+    "source": "data/sample/product_manual.md",
+    "exclusions_count": 5,
+    "note": "The five exclusions are listed in section 2.1 of the sample manual."
+  },
+  "fault_injection": {
+    "tool": "document.search",
+    "mode": "timeout_once",
+    "description": "The first invocation raises a timeout error; the second succeeds."
+  },
+  "expected_output_criteria": [
+    "The exclusions are listed and match the document.",
+    "The transient failure and the subsequent retry are both recorded.",
+    "The retry did not require a change of plan."
+  ],
+  "failure_conditions": [
+    "The exclusions are asserted without any successful retrieval.",
+    "The system treats a timeout as a permanent failure and gives up despite a working retry path.",
+    "The system retries more times than the configured budget."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state.",
+    "planning_quality": "Plan schema valid; the plan is not needlessly rewritten to handle a transient error.",
+    "tool_selection_accuracy": "document.search is retried rather than replaced.",
+    "verification_accuracy": "Verification confirms the answer came from a successful retrieval, not from the failed attempt.",
+    "recovery_effectiveness": "The transient failure is recovered within the budget. This is the primary measured variable.",
+    "evidence_accuracy": "At least 80% of cited spans support the listed exclusions.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "The distinguishing behaviour here is the difference between retrying and replanning. A correct implementation retries the same tool with the same inputs; a replanner that rewrites the plan on every failure is over-engineered and can introduce new errors. Both the retry count and whether the plan was rewritten are recorded. This scenario also exposes hybrids that classify timeouts as permanent failures, which is a realistic hybrid weakness worth reporting."
+}

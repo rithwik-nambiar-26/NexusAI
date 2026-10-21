@@ -1,0 +1,65 @@
+{
+  "scenario_id": "SC-13",
+  "name": "Recovery requiring an adaptive plan change",
+  "category": "recovery_and_replanning",
+  "difficulty": "hard",
+  "research_objectives": [
+    "O2",
+    "O5",
+    "O6"
+  ],
+  "research_questions": [
+    "RQ1.1",
+    "RQ1.5"
+  ],
+  "user_input": "Summarise data/sample/product_manual.md and save the summary to notes/summary.md.",
+  "expected_intent": "document_summarisation_with_write",
+  "expected_workflow": "read_then_summarise_then_write_with_replan",
+  "expected_plan": {
+    "min_steps": 3,
+    "max_steps": 6,
+    "must_include_steps": [
+      "document.read",
+      "llm.summarise",
+      "filesystem.write"
+    ],
+    "must_include_dependencies": true,
+    "notes": "The write target directory does not exist. The initial plan must be revised to create the directory before writing."
+  },
+  "required_tools": [
+    "document.read",
+    "llm.summarise",
+    "filesystem.write",
+    "filesystem.mkdir"
+  ],
+  "required_documents": [
+    "data/sample/product_manual.md"
+  ],
+  "expected_outcome": "success",
+  "fault_injection": {
+    "tool": "filesystem.write",
+    "mode": "error_once_then_replan",
+    "description": "The first write fails because the parent directory notes/ does not exist. A replan that adds filesystem.mkdir must succeed within the budget."
+  },
+  "expected_output_criteria": [
+    "The summary is written to notes/summary.md.",
+    "The plan was revised to include a directory-creation step.",
+    "Both the original failure and the revision are recorded in the execution report.",
+    "The written content matches the summary that was produced."
+  ],
+  "failure_conditions": [
+    "The write fails and the run terminates without a replan.",
+    "The replan drops the summarisation step and writes an empty or unrelated file.",
+    "The plan is revised more than the configured number of times."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the success terminal state with the file written and non-empty.",
+    "planning_quality": "The revised plan is schema valid and retains the original objective; the revision is minimal.",
+    "tool_selection_accuracy": "filesystem.mkdir is added by the replan; no attempt is made to write to an alternative path that was not authorised.",
+    "verification_accuracy": "Verification confirms the file exists and its content matches the produced summary, not merely that the write call returned.",
+    "recovery_effectiveness": "This is the primary measured variable: the run must recover through a plan change, not merely through an identical retry.",
+    "evidence_accuracy": "At least 80% of cited spans from product_manual.md support the written summary.",
+    "execution_time": "Wall-clock time from goal intake to terminal state is recorded. No pass/fail threshold applies; execution time is a trade-off metric, reported alongside task completion."
+  },
+  "adversarial_notes": "This scenario separates a plain retry from genuine adaptive replanning, which is the mechanism the hypothesis claims. A hybrid implementation can fail by simply retrying the identical write (which will keep failing), or by replanning so aggressively that it loses the original objective. Both failure modes are recorded separately. Condition B, which has no replanning, is expected to fail this scenario; that expected difference is a mechanism claim, not a proof, and is reported alongside the raw numbers."
+}

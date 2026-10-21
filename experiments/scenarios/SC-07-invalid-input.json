@@ -1,0 +1,48 @@
+{
+  "scenario_id": "SC-07",
+  "name": "Invalid or malformed input",
+  "category": "invalid_input",
+  "difficulty": "low",
+  "research_objectives": [
+    "O1",
+    "O4",
+    "O5"
+  ],
+  "research_questions": [
+    "RQ1.2",
+    "RQ1.4"
+  ],
+  "user_input": "   ",
+  "expected_intent": "invalid",
+  "expected_workflow": "reject_with_validation_error",
+  "expected_plan": {
+    "min_steps": 0,
+    "max_steps": 1,
+    "must_include_steps": [],
+    "must_include_dependencies": false,
+    "notes": "Whitespace-only input must be rejected before any planning occurs. No tool may be executed."
+  },
+  "required_tools": [],
+  "required_documents": [],
+  "expected_outcome": "failed",
+  "expected_output_criteria": [
+    "The run terminates with a validation error.",
+    "No tool is executed.",
+    "The error message states that the goal is empty or invalid."
+  ],
+  "failure_conditions": [
+    "A tool is executed for an empty goal.",
+    "A plan is generated for an empty goal.",
+    "The system silently substitutes a default goal."
+  ],
+  "evaluation_criteria": {
+    "task_completion": "Run reaches the failed terminal state via input validation, and the failure reason is 'invalid_input'.",
+    "planning_quality": "No plan is produced. Schema validation passes vacuously; the metric is recorded as null with a note.",
+    "tool_selection_accuracy": "No tool is selected. The metric is recorded as null with a note rather than as a perfect score.",
+    "verification_accuracy": "Verification must agree that the input was invalid.",
+    "recovery_effectiveness": "Not applicable: retrying an empty goal is not a meaningful recovery. Recorded as null, not zero.",
+    "evidence_accuracy": "Not applicable: no evidence is retrieved. Recorded as null, not zero.",
+    "execution_time": "Wall-clock time from goal intake to the failed terminal state is recorded. For a scenario where the correct behaviour is to stop early, a shorter time is expected and is not a failure."
+  },
+  "adversarial_notes": "This scenario tests defensive behaviour rather than capability. A hybrid system can plausibly fail by over-interpreting an empty goal as an implicit request, or by asking a clarifying question instead of rejecting (a clarifying question would be recorded as 'ambiguous', which is scored as a different terminal state). Metrics for this scenario are recorded as null rather than zero, so that a refusal is not penalised as a failure to act."
+}

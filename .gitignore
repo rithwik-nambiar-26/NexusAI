@@ -1,6 +1,8 @@
 # NexusAI — gitignore
 
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,13 +23,17 @@ wheels/
 *.egg
 MANIFEST
 
+# ---------------------------------------------------------------------------
 # Virtual environments
+# ---------------------------------------------------------------------------
 .venv/
 venv/
 env/
 ENV/
 
+# ---------------------------------------------------------------------------
 # IDE / editor
+# ---------------------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
@@ -35,12 +41,19 @@ ENV/
 *~
 .DS_Store
 
+# ---------------------------------------------------------------------------
 # OS
+# ---------------------------------------------------------------------------
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
 
+# ---------------------------------------------------------------------------
 # Environment / secrets (never commit)
+# ---------------------------------------------------------------------------
 .env
 .env.*
 *.env
@@ -50,24 +63,65 @@ Desktop.ini
 secrets/
 credentials/
 config.local.py
+*.db
+*.sqlite
+*.sqlite3
 
-# Experiment data (local-only; may contain tool outputs or user-provided content)
-experiments/
-.runs/
+# ---------------------------------------------------------------------------
+# Experiment data
+# ---------------------------------------------------------------------------
+# Version-controlled (see below): scenario definitions, dataset documentation,
+# evaluation scripts, and aggregated results.
+# Local-only: raw run traces, private documents, local databases, vector stores.
+experiments/*
+!experiments/README.md
+!experiments/scenarios/
+!experiments/datasets/
+!experiments/results/
+!experiments/scripts/
+experiments/runs/
+experiments/corpus/
+experiments/*.db
+experiments/*.sqlite3
+experiments/.ipynb_checkpoints/
 
+# ---------------------------------------------------------------------------
+# Data (sample data is versioned; raw and processed are local-only)
+# ---------------------------------------------------------------------------
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Generated artifacts (model weights, vector indexes)
+# ---------------------------------------------------------------------------
+artifacts/models/*
+!artifacts/models/.gitkeep
+artifacts/vectors/
+artifacts/cache/
+
+# ---------------------------------------------------------------------------
 # Logs
+# ---------------------------------------------------------------------------
 *.log
 logs/
 
+# ---------------------------------------------------------------------------
+# Tooling caches / coverage
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+junit*.xml
+
+# ---------------------------------------------------------------------------
 # Temporary / scratch
+# ---------------------------------------------------------------------------
 scratch/
 .tmp/
 *.tmp
-
-# macOS / Windows
-.Spotlight-V100
-.Trashes
-$RECYCLE.BIN/
-
-# Bytecode / compiled
-*.pyc
