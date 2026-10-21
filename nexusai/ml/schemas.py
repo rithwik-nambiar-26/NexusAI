@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class IntentCategory(str, Enum):
+class IntentCategory(StrEnum):
     """Supported intent categories for NexusAI workflow routing.
 
     Taxonomy derived from the 18 evaluation scenarios (SC-01 through SC-18)
@@ -70,7 +70,7 @@ class IntentCategory(str, Enum):
         ]
 
 
-class ClassificationStatus(str, Enum):
+class ClassificationStatus(StrEnum):
     """Status of the classification result."""
 
     CONFIDENT = "confident"

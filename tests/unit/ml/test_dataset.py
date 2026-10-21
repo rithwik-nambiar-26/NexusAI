@@ -9,9 +9,6 @@ from nexusai.ml.dataset import (
     check_duplicates,
     check_near_duplicates,
     get_class_distribution,
-    split_dataset,
-    SCENARIO_EXAMPLES,
-    SYNTHETIC_EXAMPLES,
 )
 from nexusai.ml.schemas import IntentCategory
 
@@ -102,13 +99,13 @@ def test_split_dataset_reproducibility():
 
 def test_scenario_intents_match_schema():
     """Test that scenario example intents match IntentCategory."""
-    for text, intent, source in SCENARIO_EXAMPLES:
+    for _text, intent, _source in SCENARIO_EXAMPLES:
         assert isinstance(intent, IntentCategory)
         assert intent in IntentCategory
 
 
 def test_synthetic_intents_match_schema():
     """Test that synthetic example intents match IntentCategory."""
-    for text, intent, source in SYNTHETIC_EXAMPLES:
+    for _text, intent, _source in SYNTHETIC_EXAMPLES:
         assert isinstance(intent, IntentCategory)
         assert intent in IntentCategory

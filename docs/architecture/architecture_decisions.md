@@ -22,15 +22,21 @@ Records significant architectural decisions, the alternatives considered, the ra
 | AD-08 | RAG over local user document corpus with cited passages | Proposed | Grounds step evidence in user-provided documents; traceable citations | Retrieval quality bounds step correctness; chunking/embedding choices to tune | O3 |
 | AD-09 | Execution report as a first-class output | Proposed | Makes every action auditable; supports the review criteria for transparency | Report generation is additional engineering | O5/O6 |
 | AD-10 | No modification of FCC configuration, provider routing, model aliases, or credentials | Proposed | Satisfies non-negotiable constraint | Development must work within existing FCC setup | Process |
+| AD-11 | Intent taxonomy of 12 classes: 7 workflow-mapped, 5 special-handling | Accepted (Day 2.2) | Each class maps to a distinct workflow pattern or a distinct refusal; splitting `document_operation` into extraction vs transformation removed a real ambiguity | More classes need more labelled data; classes with 3–4 examples are weakly estimated | O1 |
+| AD-12 | TF-IDF + Logistic Regression as the intent baseline, with optional sigmoid calibration | Accepted (Day 2.2) | Best validation macro F1 of the three compared variants (0.639 vs 0.431 and 0.379); open-source and local | Small dataset; several classes score F1 = 0.00 on the held-out test set | O1 |
+| AD-13 | Deterministic template-driven task decomposition | Accepted (Day 3) | Reproducible and testable without an LLM; keeps the plan inspectable, which is the point of a typed plan | Templates encode one canonical shape per intent; an unusual request may fit it only approximately | O2 |
+| AD-14 | NetworkX for dependency graph construction, cycle detection and topological ordering | Accepted (Day 3) | Mature, open-source graph library; correct directed-cycle semantics (`simple_cycles`, not the undirected `cycle_basis`) | One more dependency, kept within the open-source constraint | O2 |
+| AD-15 | Planning is not authorization: approval-gated task types are flagged, never executed | Accepted (Day 3) | Keeps the safety decision with the executor (Day 5) rather than the planner; a destructive request produces no executable plan at all | The executor must honour `requires_approval`; enforcement is Day 5 work | O4, O5 |
+| AD-16 | Plan persistence deferred beyond Day 3 | Accepted (Day 3) | Planning is a pure function of its input in Day 3, which makes it fully testable; the Day 1 schema already supports runs and steps | Plans are not retrievable after the response; retrieval endpoints report this honestly | O2 |
 
 ## 3. Decisions pending (Phase 1)
 
-- Specific intent taxonomy and classifier model (scikit-learn logistic regression vs. sentence-transformer encoder vs. zero-shot LLM classification).
 - RAG embedding model and chunking strategy (bounded by hardware-aware constraint).
-- Plan schema serialisation (JSON/YAML) and step type vocabulary.
+- Plan schema serialisation and step type vocabulary — partly settled in Day 3: the vocabulary is the `TaskType` enum and the plan serialises through Pydantic (JSON).
 - Tool registry format and schema language (JSON Schema vs. Pydantic vs. dataclasses).
 - Verification criterion language (per-step expected-outcome templates vs. LLM-based checker).
 - Local UI: terminal/CLI vs. minimal local interface.
+- Whether the Day 2 intent taxonomy is extended or merged, pending more labelled data.
 
 Each pending decision will be recorded here with rationale before implementation.
 

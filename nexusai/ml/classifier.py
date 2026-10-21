@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import pickle
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -47,7 +47,7 @@ DEFAULT_CONFIDENCE_THRESHOLD = 0.55
 CLARIFICATION_THRESHOLD = 0.35
 
 
-class ModelType(str, Enum):
+class ModelType(StrEnum):
     """Supported model types."""
 
     LOGISTIC_REGRESSION = "logistic_regression"

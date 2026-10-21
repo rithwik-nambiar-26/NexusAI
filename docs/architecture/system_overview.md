@@ -1,8 +1,8 @@
 # System Overview
 
 **Project:** NexusAI  
-**Document status:** Draft v0.1 — Phase 0 research foundation  
-**Date:** 2026-10-20
+**Document status:** Draft v0.2 — Phase 1, Days 1–3 implemented  
+**Date:** 2026-10-21
 
 ## 1. Purpose
 
@@ -50,17 +50,22 @@ A high-level, architecture-agnostic description of the NexusAI system. It define
 
 ## 3. Component responsibilities
 
-| Component | Responsibility | Objective |
-|-----------|---------------|-----------|
-| Goal intake | Accepts natural-language goal input; performs minimal sanitisation | O1 |
-| Intent router | Classifies intent (ML classifier) with LLM fallback for out-of-taxonomy inputs | O1 |
-| Planner | Decomposes the goal into a typed, dependency-aware plan with declared expected outcomes | O2 |
-| RAG module | Retrieves relevant passages from the local user corpus; returns cited evidence | O3 |
-| Tool registry | Holds registered tools with input schemas; resolves intent/tool to concrete tool | O4 |
-| Executor | Validates inputs against schema; enforces approval gates; executes tools; captures outputs | O4 |
-| Verifier | Independently checks each step's actual output against its declared expected outcome | O5 |
-| Replanner | On verified failure, revises remaining steps within a bounded retry budget | O5 |
-| Report generator | Produces the auditable execution report (goal, plan, per-step evidence, verification, retries, outcome) | O5/O6 |
+| Component | Responsibility | Objective | Status |
+|-----------|---------------|-----------|--------|
+| Goal intake | Accepts natural-language goal input; performs minimal sanitisation | O1 | ✅ Day 1 |
+| Intent router | Classifies intent (ML classifier) with LLM fallback for out-of-taxonomy inputs | O1 | ✅ Day 2 (ML classifier); LLM fallback pending |
+| Planner | Decomposes the goal into a typed, dependency-aware plan with declared expected outcomes | O2 | ✅ Day 3 (see `planner_design.md`) |
+| RAG module | Retrieves relevant passages from the local user corpus; returns cited evidence | O3 | ⏳ Day 4 |
+| Tool registry | Holds registered tools with input schemas; resolves intent/tool to concrete tool | O4 | ⏳ Day 5 |
+| Executor | Validates inputs against schema; enforces approval gates; executes tools; captures outputs | O4 | ⏳ Day 5 |
+| Verifier | Independently checks each step's actual output against its declared expected outcome | O5 | ⏳ Day 6 |
+| Replanner | On verified failure, revises remaining steps within a bounded retry budget | O5 | ⏳ Day 6 |
+| Report generator | Produces the auditable execution report (goal, plan, per-step evidence, verification, retries, outcome) | O5/O6 | ⏳ Day 7 |
+
+The planner introduced in Day 3 is specified in detail in
+`planner_design.md`: plan schema, task decomposition templates, NetworkX-based
+dependency resolution, validation rules and the safety policy. It plans only
+and never authorizes execution.
 
 ## 4. Data flow (typical execution)
 

@@ -1,7 +1,7 @@
 # NexusAI
 
 **Working title:** NexusAI: AI-Powered Personal Task Automation  
-**Status:** Phase 1 — Day 1 engineering foundation complete  
+**Status:** Phase 1 — Days 1–3 implemented (scaffolding, intent classification, structured planning)  
 **MSc Data Science project**  
 **Second Review:** 23–25 October 2026
 
@@ -115,10 +115,32 @@ With the FastAPI server running (`python -m nexusai serve`):
 |--------|------|-------------|
 | GET | `/health` | Liveness/readiness probe |
 | GET | `/api/v1/system/status` | Detailed system status with service probes |
+| POST | `/api/v1/intent/classify` | Classify a request into an intent category |
+| GET | `/api/v1/intent/intents` | List intent categories and workflow support |
+| GET | `/api/v1/intent/status` | Intent classifier availability |
+| POST | `/api/v1/planner/plan` | Create a structured execution plan |
+| GET | `/api/v1/planner/status` | Planner availability |
 | POST | `/api/v1/workflows` | Create a workflow run |
 | GET | `/api/v1/workflows` | List workflow runs (paginated, filterable) |
 | GET | `/api/v1/workflows/{run_id}` | Get a workflow run with steps |
 | DELETE | `/api/v1/workflows/{run_id}` | Delete a workflow run |
+
+### Example: create a plan
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/planner/plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Read data/sample/product_manual.md and summarise the warranty conditions.",
+    "intent": "document_summarisation",
+    "source": "explicit"
+  }'
+```
+
+The plan contains typed tasks, an explicit dependency graph, a validated
+execution order, and the information the plan still needs. Supplying
+`intent` skips classification; omitting it lets the planner classify the
+request first. **The planner plans; it does not execute.**
 
 ## Testing
 
@@ -155,10 +177,18 @@ NexusAI/
 │   │   ├── services/           # System, workflow services
 │   │   └── ui/                 # Streamlit app + 6 pages
 │   ├── agents/                 # Placeholder (Day 2+)
-│   ├── ml/                     # Placeholder (Day 2+)
+│   ├── ml/                     # Intent classifier + planner
+│   │   ├── classifier.py        # TF-IDF + LogisticRegression / LinearSVC
+│   │   ├── dataset.py          # Intent dataset (75 examples, 12 classes)
+│   │   ├── schemas.py          # Intent taxonomy and classification schemas
+│   │   ├── train.py            # Training, model comparison, evaluation
+│   │   └── planner/            # Structured planning (Day 3)
+│   │       ├── schemas.py      # Plan, Task, TaskType, PlanStatus
+│   │       ├── dependencies.py # NetworkX graph resolution
+│   │       └── service.py      # Decomposition + validation
 │   ├── rag/                    # Placeholder (Day 4)
 │   └── tools/                  # Placeholder (Day 5)
-├── tests/                      # 204 tests (unit/integration/e2e)
+├── tests/                      # 325 tests (unit/integration/e2e)
 ├── experiments/
 │   ├── scenarios/              # 18 evaluation scenarios (versioned)
 │   ├── datasets/               # Dataset documentation
@@ -198,9 +228,10 @@ All research foundation documents are in `docs/research/`:
 
 | Day | Focus | Deliverable |
 |-----|-------|-------------|
-| **Day 1** ✅ | Project scaffolding, FastAPI, SQLite, Streamlit UI, tests | **Complete** — this commit |
-| Day 2 | Intent router (classifier + LLM fallback) | Intent module, classifier accuracy |
-| Day 3 | Planner (typed plan schema, dependencies) | Planner module, schema conformance |
+| **Day 1** ✅ | Project scaffolding, FastAPI, SQLite, Streamlit UI, tests | **Complete** |
+| **Day 2** ✅ | Intent router (classifier + taxonomy) | **Complete** |
+| **Day 2.2** ✅ | Intent classifier reliability (dataset, model comparison, thresholds) | **Complete** |
+| **Day 3** ✅ | Planner (typed plan schema, dependencies, validation) | **Complete** |
 | Day 4 | RAG module (indexing, retrieval, citations) | RAG module, evidence accuracy |
 | Day 5 | Tool registry + executor (validation, approval) | Executor, tool-selection accuracy |
 | Day 6 | Verifier + replanner (bounded retries) | Verifier/replanner, recovery metrics |
@@ -220,27 +251,28 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 
 ## Current Implementation Status
 
-### Implemented (Day 1)
+### Implemented (Days 1–3)
 - ✅ Python project configuration with `pyproject.toml`, `ruff`, `pytest`
-- ✅ FastAPI backend with health, system status, and workflow-run APIs
+- ✅ FastAPI backend with health, system status, intent, planner and workflow-run APIs
 - ✅ SQLite persistence (WorkflowRun + ExecutionStep models with relationships)
 - ✅ Streamlit application shell with 6 pages (Overview, Task Automation, Document Intelligence, Data Intelligence, Run History, System Status)
 - ✅ Structured logging with request-correlation IDs and secret redaction
 - ✅ Centralised Pydantic settings with `.env` support (never committed)
 - ✅ Centralised exception handling with consistent JSON error shapes
 - ✅ Request ID middleware (propagation + context variable)
-- ✅ 204 passing tests (unit, integration, e2e, UI smoke)
+- ✅ **Intent classification** — TF-IDF + Logistic Regression baseline over a 12-class taxonomy, with validation-tuned thresholds, optional probability calibration, and abstention for unclear requests
+- ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
+- ✅ 325 passing tests (unit, integration, e2e, UI smoke)
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 
-### Planned (Days 2–7)
-- ⏳ Intent router with ML classifier + LLM fallback
-- ⏳ Structured planner with typed plan schema and dependency resolution
+### Planned (Days 4–7)
 - ⏳ RAG module with local corpus indexing and cited retrieval
 - ⏳ Tool registry with schema validation and user approval gates
 - ⏳ Independent verifier and bounded adaptive replanner
 - ⏳ Execution report generator and experiment harness
 - ⏳ First full test-matrix execution (Conditions A/B/C)
+- ⏳ LLM fallback for the intent router and an LLM planning backend behind the existing `PlanningStrategy` interface
 
 ## License
 

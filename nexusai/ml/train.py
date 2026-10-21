@@ -16,16 +16,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 # Ensure project root is in path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 # ruff: noqa: E402
-import json
-import sys
-from pathlib import Path
-
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 
 from nexusai.ml.classifier import IntentClassifier, ModelType
@@ -43,7 +40,7 @@ def evaluate_model(
 ) -> dict[str, Any]:
     """Train and evaluate a classifier with full pipeline."""
     # Train with validation data for threshold tuning
-    metadata = classifier.train(train_texts, train_labels, val_texts, val_labels)
+    classifier.train(train_texts, train_labels, val_texts, val_labels)
 
     # Cross-validation on training set
     cv_pipeline = classifier._create_pipeline()
@@ -130,14 +127,6 @@ def main() -> int:
     test.to_json(dataset_dir / "test.json", orient="records", indent=2)
     df.to_json(dataset_dir / "full.json", orient="records", indent=2)
     print(f"   Saved to {dataset_dir}")
-
-    # Prepare data
-    train_texts = train["text"].tolist()
-    train_labels = train["intent"].tolist()
-    val_texts = val["text"].tolist()
-    val_labels = val["intent"].tolist()
-    test_texts = test["text"].tolist()
-    test_labels = test["intent"].tolist()
 
     # Train and compare models
     print("\n4. Training and comparing models...")
@@ -255,11 +244,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import json
-    import sys
-    from pathlib import Path
-    from sklearn.model_selection import train_test_split
-    from nexusai.ml.classifier import IntentClassifier, ModelType
-    from nexusai.ml.dataset import build_dataset
-
     sys.exit(main())

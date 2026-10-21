@@ -11,13 +11,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from nexusai.ml.schemas import IntentCategory
-
 
 # ---------------------------------------------------------------------------
 # Base examples from the 18 evaluation scenarios
@@ -562,8 +560,6 @@ def split_dataset_by_group(
 
     All examples from the same source group go to the same split.
     """
-    groups = df[group_col].unique()
-
     # Split groups
     from sklearn.model_selection import GroupShuffleSplit
 
