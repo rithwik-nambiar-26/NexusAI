@@ -10,7 +10,7 @@
   - `docs/research/`: problem statement, research questions, objectives and scope, research hypothesis, literature review, literature matrix, research gap, research methodology, experimental design, evaluation metrics, data collection plan.
   - `docs/architecture/`: system overview, architecture decisions.
   - `docs/project_management/`: seven-day implementation plan, objective traceability matrix, review-readiness matrix, daily checkpoints.
-- Created root `README.md`, `CLAUDE.md`, `.gitignore`.
+- Created root `README.md`, `AGENTS.md`, `.gitignore`.
 
 ## Objectives advanced
 

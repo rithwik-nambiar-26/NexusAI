@@ -1,4 +1,4 @@
-# NexusAI — Codex context
+# NexusAI — Project Context
 
 **Project:** NexusAI — AI-Powered Personal Task Automation (MSc Data Science)  
 **Phase:** Phase 0 research foundation complete; Phase 1 implementation pending review
@@ -11,7 +11,7 @@
 
 - Python-only application implementation. No Java, JavaScript, TypeScript, React, or Node.js.
 - Open-source and local-first. No mandatory paid API, paid database, or AWS dependency.
-- Do **not** modify FCC configuration, provider routing, model aliases, or credentials.
+- Do **not** modify provider routing, model aliases, or credentials.
 - Optional local LLM integration must be hardware-aware.
 - Never invent research papers, citations, experimental results, or evaluation metrics.
 
@@ -43,10 +43,11 @@
 ## Git
 
 - Commit style: `docs(research): ...`
-- End commit messages with `Co-Authored-By: Codex Opus 5.5 <noreply@anthropic.com>`
 - Never commit secrets, credentials, or local environment files (`experiments/`, `.env`, `*.key`, etc. are gitignored)
+- Commit attribution lines are not mandated by the project; follow your own or your team's conventions.
 
-## FCC
+## Development environment
 
-- Use Codex through the existing FCC configuration.
-- Do not modify FCC settings, routing, aliases, or credentials.
+- Use your preferred development tools and AI assistants.
+- Do not modify provider routing, model aliases, or credentials.
+- The project has no mandatory AI tool dependency.

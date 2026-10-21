@@ -173,7 +173,7 @@ NexusAI/
 │   ├── architecture/           # System overview, decisions
 │   └── project_management/     # Plans, traceability, checkpoints
 ├── pyproject.toml              # Project config, deps, pytest, ruff
-├── CLAUDE.md                   # Development instructions
+├── AGENTS.md                   # Project instructions
 ├── README.md
 ├── .gitignore
 └── .env.example                # Safe environment template
