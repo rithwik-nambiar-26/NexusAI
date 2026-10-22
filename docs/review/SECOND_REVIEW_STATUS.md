@@ -1,7 +1,7 @@
 # NexusAI — Second Review Status
 
 **Review:** MSc Data Science Second Review, 23–25 October 2026  
-**Status as at:** 2026-10-21, commit `2359145` plus the Day 5.5 integration work  
+**Status as at:** 2026-10-22, commit `0caad0f` (Days 1-5, the Day 5.5 interface, the intent-confirmation flow and the reminder capability)  
 **Prepared by:** the implementation agent, from the actual repository state
 
 ## 1. Executive Summary
@@ -19,6 +19,8 @@ claim is made anywhere in this repository.
 | Area | State |
 |------|-------|
 | Intent classification | Implemented and tested |
+| Intent confirmation flow | Implemented and tested |
+| Reminder capability | Implemented and tested |
 | Structured planning | Implemented and tested |
 | Document intelligence (RAG) | Implemented and tested |
 | Controlled tool execution | Implemented and tested |
@@ -36,7 +38,7 @@ exercised manually through the Streamlit interface.
 
 | Component | Location | Tests | Manual |
 |-----------|----------|-------|--------|
-| FastAPI app, 16 endpoints | `nexusai/app/main.py` | ✅ | ✅ |
+| FastAPI app, 29 endpoints | `nexusai/app/main.py` | ✅ | ✅ |
 | Request-ID middleware, structured logging | `nexusai/app/core/` | ✅ | ✅ |
 | Centralised settings and error handling | `nexusai/app/config.py`, `core/exceptions.py` | ✅ | ✅ |
 | SQLite persistence (runs and steps) | `nexusai/app/db/` | ✅ | ✅ |
@@ -49,9 +51,11 @@ exercised manually through the Streamlit interface.
 | Tool registry and execution engine | `nexusai/app/execution/` | ✅ | ✅ |
 | Filesystem access policy | `nexusai/app/security/paths.py` | ✅ | ✅ |
 | CSV profiling and aggregation | `nexusai/app/execution/csv_tool.py` | ✅ | ✅ |
-| Streamlit demonstration interface | `nexusai/app/ui/` | ✅ | ✅ |
+| Reminder create/list/cancel | `nexusai/app/execution/reminder_tool.py` | ✅ | ✅ |
+| Reminder scheduler | `nexusai/app/services/reminder_scheduler.py` | ✅ | ✅ |
+| Streamlit demonstration interface (7 pages) | `nexusai/app/ui/` | ✅ | ✅ |
 
-**Test count:** 527 passing, 2 skipped (the symlink tests skip where the
+**Test count:** 595 passing, 2 skipped (the symlink tests skip where the
 operating system does not permit symlink creation). Ruff reports no
 findings.
 
@@ -60,7 +64,7 @@ findings.
 | Item | Why | How to demonstrate |
 |------|-----|--------------------|
 | PDF and DOCX extraction | The manual pass used the Markdown and CSV fixtures | Upload a PDF or DOCX on the Document Intelligence page |
-| The approval decision endpoint | The registered capabilities are read-only, so no live approval is reachable | Requires a write or send tool, which is Day 5+ work |
+| The approval decision endpoint | The registered capabilities were read-only, so no live approval was reachable | Now reachable: creating or cancelling a reminder waits for an explicit approval, which the Task Automation page offers |
 | The duplicate-execution guard | Exercised in unit tests, not from the UI | Execute the same plan twice in one session |
 
 ## 4. What Is Partially Implemented
@@ -71,7 +75,8 @@ findings.
 | Document transformation | `document.transform` and `filesystem.write` are named in the plan | No capability is registered, so those steps are skipped |
 | Communication | `communication.draft` and `communication.send` are named in the plan | No capability is registered, so a request to send a message is correctly refused rather than sent |
 | Verification | Every plan ends with a verification task | No `verify.content` or `verify.calculation` capability exists yet; those steps are skipped |
-| Intent classifier | 12 classes, trained on 75 examples | Per-class F1 is 0.00 for `data_analysis`, `destructive_operation` and `infeasible` on the held-out set |
+| Intent classifier | 12 classes, trained on 75 examples | Per-class F1 is 0.00 for `data_analysis`, `destructive_operation` and `infeasible` on the held-out set; the model-selection step has a substring defect (§1.4 of KNOWN_LIMITATIONS) |
+| Reminder delivery | An in-process scheduler fires due reminders while NexusAI runs | A reminder that comes due while NexusAI is stopped is recorded as missed, not delivered. No operating-system job is registered |
 
 ## 5. What Is Not Implemented
 
@@ -81,7 +86,9 @@ findings.
 - The experiment harness and the condition A/B/C comparison (O6)
 - Durable execution history (the report is returned but not replayed)
 - A local LLM planning or answering backend (optional by design)
-- Any tool that writes, sends or deletes
+- Any tool that sends or deletes
+- A scheduler that delivers reminders while NexusAI is not running
+- A classifier that predicts the `reminder` intent
 
 ## 6. Proposed Research Experiments (Not Yet Run)
 
@@ -115,10 +122,10 @@ contributions, but the *content* of every row is provisional.
 
 | Objective | Description | State | Evidence |
 |-----------|-------------|-------|----------|
-| **O1** | Interpret natural-language goals and classify task intent | ✅ Implemented and tested | `nexusai/ml/classifier.py`; held-out accuracy 0.667, macro F1 0.622; Day-2, Day-2.1, Day-2.2 checkpoints |
+| **O1** | Interpret natural-language goals and classify task intent | ✅ Implemented and tested | `nexusai/ml/classifier.py`; held-out accuracy 0.667, macro F1 0.622; Day-2, Day-2.1, Day-2.2 checkpoints; the confirmation flow in `nexusai/app/ui/pages/task_automation.py` |
 | **O2** | Decompose goals into executable, dependency-aware steps | ✅ Implemented and tested | `nexusai/ml/planner/`; `architecture/planner_design.md`; Day-3 checkpoint |
 | **O3** | Retrieve relevant information from user-provided documents | ✅ Implemented and tested | `nexusai/rag/`; `architecture/rag_architecture.md`; Day-4 checkpoint |
-| **O4** | Secure tool execution with registered tools and validated inputs | ✅ Implemented and tested | `nexusai/app/execution/`, `app/security/`; `architecture/execution_engine.md`; Day-5 checkpoint |
+| **O4** | Secure tool execution with registered tools and validated inputs | ✅ Implemented and tested | `nexusai/app/execution/`, `app/security/`; `architecture/execution_engine.md`; Day-5 checkpoint; the reminder capability is the first write-capable tool, and it goes through the same registry, schemas and approval gate |
 | **O5** | Verification, bounded retries, failure handling, replanning | ⏳ Partial — bounded retries and failure handling exist; independent verification and replanning do not | `nexusai/app/execution/engine.py` (retries, blocking); Day 6 pending |
 | **O6** | Evaluate with measurable metrics | ⏳ Partial — metrics are defined; the harness that produces them is not built | `docs/research/evaluation_metrics.md`; Day 7 pending |
 

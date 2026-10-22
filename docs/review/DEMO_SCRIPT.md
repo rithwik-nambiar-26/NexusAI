@@ -98,17 +98,27 @@ This is the centrepiece. Work through it in order.
    confidence is low — the classifier is experimental, and the page
    shows that honestly.
 
-2. Press *Generate plan*. Show the **task table**: each task's type, the
+2. **Show the confirmation step.** The classifier was not confident, so
+   the page lists the intents it ranked, with the score it gave each
+   one, and asks which one was meant. Point at the top candidate: it is
+   the right one, and the page was willing to say so rather than
+   guessing. Choose it and press *Confirm this intent*.
+
+   > "It does not silently pick for you. It shows what it thinks, with
+   > the numbers, and lets you correct it. The plan records that the
+   > intent came from you."
+
+3. Press *Generate plan*. Show the **task table**: each task's type, the
    capabilities it needs, what it depends on. Show the **execution
    order** and the **parallel levels** beneath it.
 
-3. Point at the last task — `verify.content` — and note that it is
+4. Point at the last task — `verify.content` — and note that it is
    planned but not yet executable. **Verification is Day 6.**
 
-4. Press **Execute plan**. Expand the task rows to show the **actual
+5. Press **Execute plan**. Expand the task rows to show the **actual
    inputs and outputs**, and the **capability** that ran.
 
-5. **Show the safety behaviour.** Press *Execute plan* again on the same
+6. **Show the safety behaviour.** Press *Execute plan* again on the same
    plan: the tasks are now **skipped** with "already been executed". The
    guard is real.
 
@@ -137,6 +147,21 @@ totals.
 > "These numbers are computed from the file by a registered capability.
 > The same file, the same tool, every time — the figures are traceable
 > to the source."
+
+### 3d. A reminder, and what it can promise (60 seconds)
+
+**Page: Reminders**
+
+1. Type `Team standup` in the message box and `tomorrow at 9 AM` in the
+   due box. Press **Create reminder**.
+2. Show the stored reminder with its due time and timezone. Switch the
+   status filter to `missed` to show the state the page reports.
+
+> "This reminder is delivered while NexusAI is running. If the
+> application or the computer is off when it falls due, it is recorded as
+> missed and shown here next time. NexusAI does not register a Windows
+> scheduled task and does not run anything on your machine in the
+> background. It would rather tell you the limit than pretend."
 
 ---
 

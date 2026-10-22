@@ -107,11 +107,19 @@ reason: The retrieved passages did not contain a statement that
 | CSV not in the reference pattern | `find_document_reference` only matched document extensions, so a `.csv` was never derived | The pattern now includes `csv` and `tsv` |
 | Data tool had no path or columns | `data.load` failed validation because the planner's data template declares no input parameters | The derivation now supplies `path`, `group_by` and `measure` for the data capabilities |
 
+## Defects Found and Fixed in the Following Pass
+
+| Defect | Symptom | Fix |
+|--------|---------|-----|
+| A valid document request was blocked | "Summarise the uploaded meeting notes" classified correctly at 0.240, below the 0.35 clarification threshold, so it was refused and the planner produced an empty plan | The Task Automation page now shows the ranked candidate intents with their scores and the user chooses one; the choice is planned with `source="explicit"`. The thresholds were not lowered, because the same model scores "Set an alarm for 7 AM" at 0.195 |
+| A stale plan was shown for the next request | The Plan section kept rendering the plan left in session state, so a request for the product manual displayed an `out_of_scope` plan belonging to an earlier request | A new classification now invalidates the plan, the execution and the override that preceded it |
+| The Data Intelligence page returned HTTP 400 | The page hand-built a plan document whose `created_at` and `updated_at` were null, which failed the plan schema's validation | The page now calls the registered `data.analyse` capability directly, through the registry and the same filesystem policy, and needs no plan |
+
 ## Regression Suite
 
 | Check | Result |
 |-------|--------|
-| `python -m pytest tests/` | **527 passed, 2 skipped** |
+| `python -m pytest tests/` | **595 passed, 2 skipped** |
 | `python -m ruff check .` | **All checks passed** |
 
 The two skips are the symlink-escape tests, which need a privilege

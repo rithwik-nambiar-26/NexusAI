@@ -1,7 +1,7 @@
 # NexusAI
 
 **Working title:** NexusAI: AI-Powered Personal Task Automation  
-**Status:** Phase 1 — Days 1–5 implemented (scaffolding, intent classification, structured planning, document intelligence, controlled execution), with the Day 5.5 Streamlit review interface  
+**Status:** Phase 1 — Days 1–5 implemented (scaffolding, intent classification, structured planning, document intelligence, controlled execution), with the Day 5.5 Streamlit review interface, the intent-confirmation flow and a local reminder capability  
 **MSc Data Science project**  
 **Second Review:** 23–25 October 2026
 
@@ -127,6 +127,11 @@ With the FastAPI server running (`python -m nexusai serve`):
 | POST | `/api/v1/documents/answer` | Answer a question grounded in the indexed documents |
 | POST | `/api/v1/documents/summarise` | Summarise a document or the indexed corpus |
 | GET | `/api/v1/documents/capabilities` | List the planner capabilities this module satisfies |
+| POST | `/api/v1/documents/analyse-csv` | Analyse a CSV file through the registered `data.analyse` capability (no plan needed) |
+| GET | `/api/v1/reminders` | List the stored reminders |
+| GET | `/api/v1/reminders/due` | List the reminders that are due |
+| POST | `/api/v1/reminders` | Store a reminder for a time the user names |
+| DELETE | `/api/v1/reminders/{id}` | Cancel a pending reminder |
 | POST | `/api/v1/execution/execute` | Execute a validated plan through the tool registry |
 | POST | `/api/v1/execution/approve` | Approve or deny a pending operation |
 | GET | `/api/v1/execution/tools` | List the registered tool capabilities |
@@ -163,9 +168,9 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=nexusai --cov-report=term-missing
 
 # Run specific test types
-python -m pytest tests/unit/ -v        # Unit tests (44)
-python -m pytest tests/integration/ -v # Integration tests (23)
-python -m pytest tests/e2e/ -v         # E2E tests (13)
+python -m pytest tests/unit/ -v        # Unit tests (425 passed, 2 skipped)
+python -m pytest tests/integration/ -v # Integration tests (141 passed)
+python -m pytest tests/e2e/ -v         # E2E tests (29 passed)
 
 # Linting
 python -m ruff check .
@@ -182,12 +187,22 @@ NexusAI/
 │   ├── app/
 │   │   ├── config.py           # Pydantic Settings
 │   │   ├── main.py             # FastAPI factory
+│   │   ├── cli.py              # Command-line entry point
 │   │   ├── core/               # Logging, middleware, exceptions, context
 │   │   ├── api/                # Routes, schemas, dependencies
 │   │   ├── db/                 # Models, session, repositories
-│   │   ├── services/           # System, workflow services
-│   │   └── ui/                 # Streamlit app + 6 pages
-│   ├── agents/                 # Placeholder (Day 2+)
+│   │   ├── services/           # System, workflow, reminder services
+│   │   ├── execution/           # Tool registry + execution engine (Day 5)
+│   │   │   ├── registry.py      # Typed tool registry
+│   │   │   ├── tools.py         # Day 4 capability adapters
+│   │   │   ├── csv_tool.py      # CSV profiling and aggregation capability
+│   │   │   ├── reminder_tool.py # Reminder create/list/cancel capabilities
+│   │   │   ├── engine.py        # Execution lifecycle, approval, retries
+│   │   │   └── derivation.py    # Task input derivation
+│   │   ├── security/            # Filesystem access policy (Day 5)
+│   │   │   └── paths.py         # Allowed-root path policy
+│   │   └── ui/                 # Streamlit app + 7 pages
+│   ├── agents/                 # Placeholder (Day 6+)
 │   ├── ml/                     # Intent classifier + planner
 │   │   ├── classifier.py        # TF-IDF + LogisticRegression / LinearSVC
 │   │   ├── dataset.py          # Intent dataset (75 examples, 12 classes)
@@ -197,14 +212,6 @@ NexusAI/
 │   │       ├── schemas.py      # Plan, Task, TaskType, PlanStatus
 │   │       ├── dependencies.py # NetworkX graph resolution
 │   │       └── service.py      # Decomposition + validation
-│   ├── app/
-│   │   ├── execution/           # Tool registry + execution engine (Day 5)
-│   │   │   ├── registry.py      # Typed tool registry
-│   │   │   ├── tools.py         # Day 4 capability adapters
-│   │   │   ├── engine.py        # Execution lifecycle, approval, retries
-│   │   │   └── derivation.py    # Task input derivation
-│   │   └── security/            # Filesystem access policy (Day 5)
-│   │       └── paths.py         # Allowed-root path policy
 │   ├── rag/                    # Document intelligence (Day 4)
 │   │   ├── schemas.py          # Document, Chunk, Evidence, Answer schemas
 │   │   ├── extractors.py       # PDF, DOCX, TXT, Markdown extraction
@@ -214,7 +221,7 @@ NexusAI/
 │   │   ├── service.py          # Ingestion, retrieval, grounded answers
 │   │   └── capabilities.py     # Planner capability adapter
 │   └── tools/                  # Placeholder (Day 5)
-├── tests/                      # 526 tests (unit/integration/e2e)
+├── tests/                      # 595 tests (unit/integration/e2e)
 ├── experiments/
 │   ├── scenarios/              # 18 evaluation scenarios (versioned)
 │   ├── datasets/               # Dataset documentation
@@ -222,13 +229,11 @@ NexusAI/
 │   └── scripts/                # Experiment scripts
 ├── data/
 │   ├── sample/                 # Sample documents (versioned)
-│   └── raw/processed/          # Local-only (gitignored)
+│   ├── raw/processed/          # Local-only (gitignored)
+│   └── uploads/                # User-uploaded files (gitignored)
 ├── artifacts/                  # Model weights, vector stores (gitignored)
 ├── docs/
-│   ├── review/                 # Second Review preparation (Day 5.5)
-│   ├── research/               # Research foundation
-│   ├── architecture/            # Architecture and design documents
-│   └── project_management/      # Plans, traceability, checkpoints
+│   ├── review/                 # Second Review preparation
 │   ├── research/               # 11 research documents
 │   ├── architecture/           # System overview, decisions
 │   └── project_management/     # Plans, traceability, checkpoints
@@ -281,21 +286,23 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 
 ## Current Implementation Status
 
-### Implemented (Days 1–4)
+### Implemented (Days 1–5, plus the review interface and two follow-up capabilities)
 - ✅ Python project configuration with `pyproject.toml`, `ruff`, `pytest`
-- ✅ FastAPI backend with health, system status, intent, planner, document and workflow-run APIs
-- ✅ SQLite persistence (WorkflowRun + ExecutionStep models with relationships)
-- ✅ Streamlit application shell with 6 pages (Overview, Task Automation, Document Intelligence, Data Intelligence, Run History, System Status)
+- ✅ FastAPI backend with health, system status, intent, planner, document, execution, reminder and workflow-run APIs
+- ✅ SQLite persistence (WorkflowRun + ExecutionStep + Reminder models with relationships)
+- ✅ Streamlit application shell with 7 pages (Overview, Task Automation, Reminders, Document Intelligence, Data Intelligence, Run History, System Status)
 - ✅ Structured logging with request-correlation IDs and secret redaction
 - ✅ Centralised Pydantic settings with `.env` support (never committed)
 - ✅ Centralised exception handling with consistent JSON error shapes
 - ✅ Request ID middleware (propagation + context variable)
 - ✅ **Intent classification** — TF-IDF + Logistic Regression baseline over a 12-class taxonomy, with validation-tuned thresholds, optional probability calibration, and abstention for unclear requests
+- ✅ **Intent confirmation flow** — when the classifier is not confident, the Task Automation page shows the ranked candidate intents with their scores and the user chooses one. The choice is planned with `source="explicit"`, so the plan records that the intent came from the user. A confident destructive classification cannot be redirected, and the guard is enforced by the server rather than by the interface.
 - ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
 - ✅ **Document intelligence** — PDF/DOCX/TXT/Markdown ingestion, normalisation and chunking with stable ids, local embedding, a numpy-backed local vector index, retrieval with source references, and grounded question answering and summarisation with an explicit insufficient-evidence response
 - ✅ **Controlled execution** — explicit tool registry with Pydantic input/output schemas, dependency-ordered execution, approval enforced by the executor and bound to the task's inputs, bounded retries, and a filesystem access policy that confines reads to configured roots
-- ✅ **Streamlit review interface** — six live pages driving the backend over HTTP: task workspace (classify, plan, execute), document intelligence (upload, ingest, retrieve, answer, summarise), data intelligence (CSV profiling and aggregation), run history, and system status
-- ✅ 527 passing tests (unit, integration, e2e, UI smoke)
+- ✅ **Reminder capability** — create, list and cancel, registered as ordinary capabilities. The due time is parsed rather than guessed, and an ambiguous time is reported with both readings. `reminder.create` and `reminder.cancel` require explicit approval; `reminder.list` does not. An in-process scheduler delivers due reminders **only while NexusAI is running**; a reminder that comes due while it is not running is recorded as **missed** and reported, never as delivered. No operating-system job is registered and no external command is run.
+- ✅ **Streamlit review interface** — seven live pages driving the backend over HTTP: task workspace (classify, confirm, plan, approve, execute), reminders, document intelligence (upload, ingest, retrieve, answer, summarise), data intelligence (CSV profiling and aggregation), run history, and system status
+- ✅ 595 passing tests (unit, integration, e2e, UI smoke), 2 skipped
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 
@@ -303,6 +310,7 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 - ⏳ Independent verifier and bounded adaptive replanner
 - ⏳ Execution report generator and experiment harness
 - ⏳ First full test-matrix execution (Conditions A/B/C)
+- ⏳ Teaching the classifier to predict the reminder intent, and a wider, better-balanced training set with the evaluation that goes with it — a research checkpoint, deliberately separate from the capability itself
 - ⏳ LLM fallback for the intent router, an LLM planning backend, and a generative answer backend — all behind the existing interfaces
 
 ## License

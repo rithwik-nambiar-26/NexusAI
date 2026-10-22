@@ -42,7 +42,8 @@ well-mapped synthesis, but not as a verified one.
 | Test accuracy | 0.667 |
 | Test macro F1 | 0.622 |
 | Per-class F1 of 0.00 | `data_analysis`, `destructive_operation`, `infeasible` |
-| Probability calibration | Not performed |
+| Probability calibration | Sigmoid (Platt) scaling |
+| CV macro F1 (5-fold) | 0.437 ± 0.091 |
 
 With 15 test examples spread over 12 classes, most per-class metrics
 rest on a single example. The macro F1 is a rough indicator, not a
@@ -54,7 +55,49 @@ relied upon for safety. The two classes that score 0.00 are among the
 refusal paths, where the current behaviour errs towards asking rather
 than acting.
 
-### 1.4 The dataset is small and entirely synthetic
+### 1.4 The model-selection step has a defect that has not been fixed
+
+`nexusai/ml/train.py` selects the best variant on validation macro F1
+and then decides whether to calibrate it with:
+
+```python
+is_calibrated = "calibrated" in best_name.lower()
+```
+
+The winning variant is `LogisticRegression (uncalibrated)`, and the
+string `"calibrated"` is a substring of `"uncalibrated"`. The test is
+therefore true for the *uncalibrated* winner, so the shipped model is
+sigmoid-calibrated even though calibration **lost** on validation
+(uncalibrated 0.6385 macro F1, calibrated 0.4306).
+
+This is not cosmetic. Sigmoid calibration over a 12-class problem
+compresses the predicted probabilities towards the base rate, which is
+why genuine document requests score around 0.24–0.45 rather than
+higher. The confidence thresholds (0.55 confident, 0.35 clarification)
+are therefore applied to a compressed scale, and the operating point is
+not where the model comparison says it should be.
+
+**It has deliberately not been fixed here.** Changing the selection
+changes the shipped model and every reported metric, which is research
+work with its own evaluation. It is the first item of the research
+checkpoint. Until then, the figures in §1.3 describe the model that
+actually ships, and the classifier is used as a *proposal* rather than as
+a decision.
+
+### 1.5 The taxonomy has one more category than the classifier covers
+
+The intent taxonomy has 13 categories, because the `reminder` category
+was added with the reminder capability. The trained classifier covers
+12: its training set predates the capability, and the dataset was
+deliberately not padded with examples for it. So the classifier cannot
+predict `reminder`, and the confirmation flow does not offer it.
+
+**Consequence:** the reminder intent is reached through an explicit
+selection, not by classification. Teaching the classifier to cover it,
+with a wider and better-balanced training set, is the research
+checkpoint.
+
+### 1.6 The dataset is small and entirely synthetic
 
 No real user data was collected. Every example is either derived from a
 synthetic evaluation scenario or authored by hand. Generalisation to
@@ -77,25 +120,50 @@ system does not check it. This is Day 6.
 A failed task blocks its dependents and the run ends. Nothing revises
 the plan and retries. Day 6.
 
-### 2.3 No capability writes, sends or deletes
+### 2.3 One capability writes, and nothing sends or deletes
 
 The registered capabilities are:
 
-| Capability | Reads | Writes | Sends |
-|-----------|:-----:|:------:|:-----:|
-| `document.read` | ✅ | — | — |
-| `document.extract` | ✅ | — | — |
-| `llm.summarise` | ✅ | — | — |
-| `data.load` | ✅ | — | — |
-| `data.analyse` | ✅ | — | — |
+| Capability | Reads | Writes | Sends | Approval |
+|-----------|:-----:|:------:|:-----:|:--------:|
+| `document.read` | ✅ | — | — | no |
+| `document.extract` | ✅ | — | — | no |
+| `llm.summarise` | ✅ | — | — | no |
+| `data.load` | ✅ | — | — | no |
+| `data.analyse` | ✅ | — | — | no |
+| `reminder.list` | ✅ | — | — | no |
+| `reminder.create` | — | ✅ | — | **yes** |
+| `reminder.cancel` | — | ✅ | — | **yes** |
 
 **Consequence:** "send the report to the client" and "delete all files"
-are both correctly refused — but because no capability exists, not
+are still correctly refused — but because no capability exists, not
 because an approval gate refused them. The approval *mechanism* is
-implemented and tested (Day 5, `tests/unit/execution/test_engine.py`);
-it has no live state-changing tool to act on yet.
+implemented and tested (Day 5, `tests/unit/execution/test_engine.py`),
+and it now has a live state-changing tool to act on: creating or
+cancelling a reminder waits for an explicit decision, and the decision
+is bound to the task's validated inputs. A reminder plan therefore
+returns `awaiting_approval` and creates nothing until the user approves.
 
-### 2.4 The planner's templates are one shape per intent
+### 2.4 A reminder is delivered only while NexusAI is running
+
+The reminder scheduler is a daemon thread inside the NexusAI process. It
+registers no Windows scheduled task, starts no operating-system job and
+runs no external command. The only thing it writes to is the reminder
+table.
+
+**Consequence:** if the application is stopped, or the machine is
+switched off or asleep, when a reminder falls due, the reminder is **not
+delivered**. When NexusAI starts again it records those reminders as
+*missed* and reports them, rather than reporting them as delivered. A
+missed reminder is never fired afterwards.
+
+This is stated in the interface, in the API responses and in the
+capability's own output. It is a deliberate boundary, not an oversight:
+registering a Windows scheduled task would mean writing to the
+operating system's task scheduler, which is a change to the user's
+machine that the user has not asked for.
+
+### 2.5 The planner's templates are one shape per intent
 
 Each intent has a single canonical task chain. A request that fits the
 intent but needs a different shape still gets the standard chain. For
@@ -103,11 +171,18 @@ example, the `data_analysis` template has five steps, but only
 `data.load` and `data.analyse` have implementations; the remaining three
 are skipped.
 
+**One exception:** the `reminder` intent has three shapes, because
+setting, listing and cancelling are three different actions. The shape
+is chosen from the request's own wording. This is a deliberate
+exception to the one-shape rule, made because the three actions call for
+three different registered capabilities and a single shape could not
+call all three.
+
 **Consequence:** plans describe a reasonable workflow, not a bespoke one.
 Request-specific variation is carried in task parameters, not in task
 structure.
 
-### 2.5 Execution history is not persisted in full
+### 2.6 Execution history is not persisted in full
 
 What is persisted in SQLite, per run: the request, the classified
 intent, the run status and the plan.
@@ -119,7 +194,7 @@ and held in memory only.
 **Consequence:** the Run History page shows what ran and how it ended,
 but not the full output of a past run.
 
-### 2.6 The duplicate-execution guard is in-process
+### 2.7 The duplicate-execution guard is in-process
 
 A task already executed for a plan is skipped on a second execution of
 that plan, within one engine's lifetime. The guard is lost on restart.
@@ -128,7 +203,7 @@ that plan, within one engine's lifetime. The guard is lost on restart.
 architecture document states this explicitly. A durable, transactional
 guard would need a different store.
 
-### 2.7 Timeouts are declarative
+### 2.8 Timeouts are declarative
 
 Each tool declares a `timeout_seconds`. A handler that raises
 `TimeoutError` is reported as a timeout. The engine does **not**
@@ -137,7 +212,7 @@ interrupt a running thread, because doing so is not safe in-process.
 **Consequence:** a handler that hangs will hang. A handler that must be
 bounded should enforce its own timeout.
 
-### 2.8 Any handler exception is treated as potentially transient
+### 2.9 Any handler exception is treated as potentially transient
 
 A failed attempt is retried up to the policy limit when the tool is
 idempotent. The `idempotent` flag is the lever to prevent a retry, and
@@ -148,7 +223,7 @@ they are all read-only.
 retried before giving up. Harmless for the current tool set, but worth
 noting for future write-capable tools.
 
-### 2.9 Answers are extractive, not generative
+### 2.10 Answers are extractive, not generative
 
 Answers and summaries are assembled from sentences in the source text.
 No new prose is generated.
@@ -157,7 +232,7 @@ No new prose is generated.
 than a generated answer. A generative backend could be added behind the
 same service interface; none exists.
 
-### 2.10 Retrieval is lexical by default
+### 2.11 Retrieval is lexical by default
 
 The default embedder is a deterministic hashing embedder that matches on
 word overlap. The Sentence Transformers embedder matches semantically and
@@ -167,7 +242,7 @@ is available, but needs the model present locally.
 retrieve weakly. The IDF weighting and the prefix-matched stemming
 mitigate this but do not remove it.
 
-### 2.11 No web sources
+### 2.12 No web sources
 
 The `research` template names `web.search` and `web.fetch`, but no such
 capability is registered. A research request retrieves from the local
@@ -177,7 +252,7 @@ corpus only.
 question is currently limited to local documents. This matters for the
 research framing, not just the implementation.
 
-### 2.12 PDF parsing is text-only
+### 2.13 PDF parsing is text-only
 
 Text is extracted in page order. Tables are read as text. There is no OCR
 for scanned documents, and no layout-aware parsing.
@@ -197,11 +272,22 @@ Task Automation page provides a document dropdown; the API caller must
 supply a `document_id` or a path. A single request naming a file
 (`data/sample/product_manual.md`) works without any selection.
 
-### 3.3 The intent override is visible but not the default
+### 3.3 The intent is confirmed by the user when the classifier is unsure
 
-The Task Automation page has an "Advanced" panel to supply an explicit
-intent. The default path uses the classifier. Both are recorded in the
-plan's `source` field, so a reviewer can tell which was used.
+The Task Automation page runs the classifier first. If the classifier is
+confident, the plan is built from its prediction and the plan's `source`
+is `classifier`. If it is not confident, the page shows the ranked
+candidate intents with the score the classifier gave each one, and the
+user chooses. That choice is planned with `source="explicit"`, so a
+reviewer can tell from the plan which of the two happened.
+
+The "Advanced" panel still allows an explicit intent to be typed in
+directly, which is how the `reminder` intent is reached, because the
+classifier does not cover that category yet (§1.5).
+
+**Consequence:** a low-confidence classification no longer blocks a
+request, and it no longer produces a plan built on a guess either. The
+uncertainty is made visible and put to the user, rather than removed.
 
 ## 4. Security Boundaries
 
@@ -213,6 +299,7 @@ design decisions rather than gaps.
 | Filesystem reads | Restricted to configured roots (`./data`, `./docs`, `./experiments` by default). Canonical resolution defeats traversal and symlink escapes. |
 | Path policy | Shared by ingestion and execution, so they cannot diverge. |
 | Arbitrary code execution | **None.** No `eval`, `exec`, `subprocess` or shell access anywhere in the application. |
+| Operating-system changes | **None.** The reminder scheduler registers no Windows scheduled task and runs no external command. |
 | Model-generated instructions | Documents are data, never instructions. Nothing in a document is executed or obeyed. |
 | Tool execution | Only explicitly registered capabilities, with schema-validated input and output. |
 | Destructive tools | Skipped outright; none is registered. |
@@ -259,9 +346,11 @@ agreed at project level.
 | 1 | The comparative A/B/C evaluation has not been run | **High** | Days 6 and 7. The design, scenarios, metrics and rubric are complete; only the execution is missing. |
 | 2 | The literature is unverified | **High** | Independent of Days 6–7; can be worked on in parallel. |
 | 3 | No independent verification, so a wrong answer is undetectable | Medium | Day 6. The execution report already carries the evidence a verifier needs. |
-| 4 | Only 5 read-only capabilities exist, so "sending" and "deleting" are refused for lack of a tool rather than by policy | Medium | Present it accurately: the approval mechanism is implemented and tested, but has no live write-capable tool to act on. |
-| 5 | The classifier is weak on three classes | Medium | The weak classes are refusal paths, where the current behaviour is safest. |
-| 6 | The dataset is small and synthetic | Medium | Stated throughout the evaluation documentation; the metrics are reported with their support counts. |
+| 4 | The model-selection step has a substring defect, so the shipped model is calibrated when the comparison said it should not be | Medium | Documented in §1.4. Not fixed here, because fixing it changes the model and every reported metric; it is the first item of the research checkpoint. |
+| 5 | Only one capability writes, so "sending" and "deleting" are refused for lack of a tool rather than by policy | Medium | Present it accurately: the approval mechanism is implemented, tested, and now has a live write-capable tool to act on. |
+| 6 | The classifier is weak on three classes, one of which is a refusal path | Medium | The weak classes are refusal paths, where the current behaviour is safest. The confirmation flow makes the user the decision-maker when the classifier is unsure. |
+| 7 | A reminder is delivered only while NexusAI is running | Medium | Stated in the interface, in the API responses and in §2.4. Missed reminders are reported as missed, never as delivered. |
+| 8 | The dataset is small and synthetic | Medium | Stated throughout the evaluation documentation; the metrics are reported with their support counts. |
 
 ---
 

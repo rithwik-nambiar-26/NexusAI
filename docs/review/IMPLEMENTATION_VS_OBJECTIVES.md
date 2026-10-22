@@ -3,8 +3,9 @@
 **Project:** NexusAI  
 **Review:** MSc Data Science Second Review, 23–25 October 2026  
 **Date:** 2026-10-22  
-**Basis:** the actual repository at commit `c283d50` plus the Day 5.5
-Streamlit integration work
+**Basis:** the actual repository at commit `0caad0f` — Days 1–5, the
+Day 5.5 Streamlit interface, the intent-confirmation flow and the
+reminder capability
 
 ## 1. Objective-by-Objective
 
@@ -15,19 +16,30 @@ Streamlit integration work
 | Aspect | Evidence |
 |--------|----------|
 | Classifier | `nexusai/ml/classifier.py` — TF-IDF + Logistic Regression, optional sigmoid calibration |
-| Taxonomy | 12 classes in `nexusai/ml/schemas.py`; 7 workflow-mapped, 5 special-handling |
-| Evaluation | Held-out test accuracy 0.667, macro F1 0.622; CV macro F1 0.582 ± 0.077 |
+| Taxonomy | 13 classes in `nexusai/ml/schemas.py`; 8 workflow-mapped, 5 special-handling. The classifier itself covers 12 — the `reminder` category was added with the capability and the training set predates it |
+| Evaluation | Held-out test accuracy 0.667, macro F1 0.622; CV macro F1 0.437 ± 0.091 |
 | Model comparison | LogisticRegression (calibrated / uncalibrated) vs LinearSVC, selected on validation |
 | Threshold selection | Tuned on the validation split only |
 | Integration | `POST /api/v1/intent/classify`; consumed by the planner and the UI |
-| Tests | `tests/unit/ml/test_classifier.py`, `test_schemas.py`, `test_dataset.py` |
+| Confirmation flow | `nexusai/app/ui/pages/task_automation.py` — ranked candidates with their scores; the user's choice is planned with `source="explicit"` |
+| Tests | `tests/unit/ml/test_classifier.py`, `test_schemas.py`, `test_dataset.py`, `tests/integration/test_intent_confirmation.py` |
 
 **Not yet done:** the classifier is experimental. Per-class F1 is 0.00 for
 `data_analysis`, `destructive_operation` and `infeasible` on the held-out
-set, and its probabilities are not calibrated. Its output is treated as a
-*proposal* throughout the system, never as ground truth — the planner
-records the intent's source, and the executor's safety policy does not
-depend on the classifier's confidence.
+set. Its output is treated as a *proposal* throughout the system, never
+as ground truth — the planner records the intent's source, and the
+executor's safety policy does not depend on the classifier's confidence.
+
+**A defect has been found and deliberately not fixed.** The model-selection
+step in `nexusai/ml/train.py` decides whether to calibrate with
+`"calibrated" in best_name.lower()`, and the winning variant is
+`LogisticRegression (uncalibrated)` — so the substring test is true and
+the shipped model is calibrated even though calibration lost on
+validation (0.4306 against 0.6385 macro F1). Sigmoid calibration
+compresses the predicted probabilities, which is why genuine document
+requests score around 0.24–0.45. Fixing the selection changes the model
+and every reported metric, so it belongs to the research checkpoint
+rather than to a capability change. See `KNOWN_LIMITATIONS.md` §1.4.
 
 ---
 
@@ -83,12 +95,14 @@ measured. It needs human labelling and the Day 7 harness.
 | Registry | `nexusai/app/execution/registry.py` — frozen `ToolDefinition`, explicit registration only, duplicate rejection, input and output schema validation |
 | Engine | `nexusai/app/execution/engine.py` — dependency ordering, failure propagation, timeouts, bounded idempotent retries, structured error categories, duplicate-execution guard |
 | Approval | Enforced by the executor, bound to a SHA-256 fingerprint of the task's validated inputs; changed inputs invalidate the approval |
-| Safety | Destructive tools are skipped outright; no capability is registered that writes, sends or deletes |
+| Safety | Destructive tools are skipped outright; no capability is registered that sends or deletes |
 | Filesystem boundary | `nexusai/app/security/paths.py` — canonical resolution, containment check, traversal and symlink-escape refusal, shared by ingestion and execution |
 | CSV capability | `nexusai/app/execution/csv_tool.py` — read-only profiling and aggregation |
+| Reminder capability | `nexusai/app/execution/reminder_tool.py` — the first write-capable tool. `reminder.create` and `reminder.cancel` are `sensitive` and require approval; `reminder.list` is `safe`. The due time is parsed, and an ambiguous time is reported rather than guessed |
+| Scheduler | `nexusai/app/services/reminder_scheduler.py` — an in-process daemon thread. No operating-system job is registered and no external command is run. A reminder due while NexusAI is stopped is recorded as *missed*, never as delivered |
 | Integration | `POST /api/v1/execution/execute`, `/approve`; `GET /tools`, `/status` |
-| Tests | `tests/unit/execution/` (3 files), `tests/unit/security/test_paths.py`, `tests/integration/test_api_execution.py` |
-| Documentation | `docs/architecture/execution_engine.md` |
+| Tests | `tests/unit/execution/` (3 files), `tests/unit/security/test_paths.py`, `tests/integration/test_api_execution.py`, `tests/integration/test_reminders.py` |
+| Documentation | `docs/architecture/execution_engine.md`, `docs/review/KNOWN_LIMITATIONS.md` §2.4 |
 
 **Not yet done:** `tool-selection accuracy` and `invalid-invocation rate`
 are defined but not measured. The execution report carries the data they
