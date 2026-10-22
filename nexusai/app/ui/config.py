@@ -26,6 +26,7 @@ UPLOAD_DIR = os.getenv("NEXUSAI_UPLOAD_DIR", "./data/uploads")
 PAGES = [
     ("Overview", "overview"),
     ("Task Automation", "task_automation"),
+    ("Reminders", "reminders"),
     ("Document Intelligence", "document_intelligence"),
     ("Data Intelligence", "data_intelligence"),
     ("Run History", "run_history"),
@@ -35,6 +36,7 @@ PAGES = [
 NAV_ICONS = {
     "Overview": "🏠",
     "Task Automation": "⚙️",
+    "Reminders": "⏰",
     "Document Intelligence": "📄",
     "Data Intelligence": "📊",
     "Run History": "🕒",

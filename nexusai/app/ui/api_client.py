@@ -172,10 +172,45 @@ def create_plan(
     )
 
 
-def execute_plan(plan: dict[str, Any], base_url: str | None = None) -> dict[str, Any]:
-    """Execute a plan and return the execution report."""
+def execute_plan(
+    plan: dict[str, Any],
+    approvals: list[dict[str, Any]] | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Execute a plan and return the execution report.
+
+    Args:
+        plan: The plan to execute.
+        approvals: Approval decisions to apply. An approval is bound to
+            the task and to its validated inputs, so it is only honoured
+            when it still matches.
+        base_url: Override for the backend base URL.
+    """
+    payload: dict[str, Any] = {"plan": plan}
+    if approvals:
+        payload["approvals"] = approvals
     return api_request(
-        "POST", "/api/v1/execution/execute", json={"plan": plan}, base_url=base_url
+        "POST", "/api/v1/execution/execute", json=payload, base_url=base_url
+    )
+
+
+def approve_task(
+    task_id: str,
+    granted: bool = True,
+    note: str | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Approve or deny a task that is awaiting approval.
+
+    The backend holds the execution report in memory, so the decision is
+    recorded against that report. The approved request is then re-sent
+    with the next execution.
+    """
+    payload: dict[str, Any] = {"task_id": task_id, "granted": granted}
+    if note:
+        payload["note"] = note
+    return api_request(
+        "POST", "/api/v1/execution/approve", json=payload, base_url=base_url
     )
 
 
@@ -282,6 +317,48 @@ def list_runs(
     """List the persisted workflow runs."""
     return api_request(
         "GET", "/api/v1/workflows", params={"limit": limit}, base_url=base_url
+    )
+
+
+def create_reminder(
+    message: str,
+    due_at: str,
+    timezone: str | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Store a reminder for a time the user names."""
+    payload: dict[str, Any] = {"message": message, "due_at": due_at}
+    if timezone:
+        payload["timezone"] = timezone
+    return api_request("POST", "/api/v1/reminders", json=payload, base_url=base_url)
+
+
+def list_reminders(
+    status: str | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """List the stored reminders."""
+    params = {"status": status} if status else None
+    return api_request("GET", "/api/v1/reminders", params=params, base_url=base_url)
+
+
+def list_due_reminders(
+    within_minutes: int = 0,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """List the reminders that are due."""
+    return api_request(
+        "GET",
+        "/api/v1/reminders/due",
+        params={"within_minutes": within_minutes},
+        base_url=base_url,
+    )
+
+
+def cancel_reminder(reminder_id: int, base_url: str | None = None) -> dict[str, Any]:
+    """Cancel a pending reminder."""
+    return api_request(
+        "DELETE", f"/api/v1/reminders/{reminder_id}", base_url=base_url
     )
 
 

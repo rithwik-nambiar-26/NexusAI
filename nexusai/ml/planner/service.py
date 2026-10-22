@@ -26,6 +26,20 @@ from nexusai.ml.schemas import ClassificationStatus, IntentCategory
 
 logger = get_logger("ml.planner")
 
+#: Wording that means the user wants a reminder cancelled.
+_REMINDER_CANCEL_WORDS = ("cancel", "remove", "delete", "drop", "stop")
+
+#: Wording that means the user wants the reminders listed.
+_REMINDER_LIST_WORDS = (
+    "list",
+    "show",
+    "what reminders",
+    "which reminders",
+    "my reminders",
+    "do i have",
+    "upcoming",
+)
+
 
 def _strip_file_references(text: str) -> str:
     """Remove file and path references from *text*.
@@ -82,7 +96,7 @@ class PlannerService:
         pattern is reused across many phrasings, and request-specific detail
         is carried in task parameters rather than in new task shapes.
         """
-        return {
+        templates = {
             IntentCategory.DOCUMENT_QUESTION_ANSWERING.value: [
                 {
                     "task_type": TaskType.DOCUMENT_READ,
@@ -306,6 +320,44 @@ class PlannerService:
                 },
             ],
         }
+
+        # The reminder workflows have more than one shape, because "set a
+        # reminder", "list my reminders" and "cancel a reminder" are three
+        # different actions. The shape is chosen from the request's own
+        # wording, and each shape is a single registered capability.
+        templates[IntentCategory.REMINDER.value] = [
+            {
+                "task_type": TaskType.REMINDER_CREATE,
+                "task_name": "Store the reminder",
+                "description": (
+                    "Store the reminder with the due time the request names, "
+                    "and schedule it for that time."
+                ),
+                "required_capabilities": ["reminder.create"],
+                "expected_output": "The stored reminder with its due time.",
+                "verification_criteria": (
+                    "The reminder was stored with a due time in the future."
+                ),
+            },
+            {
+                "task_type": TaskType.REMINDER_LIST,
+                "task_name": "List the reminders",
+                "description": "Report the reminders that are currently stored.",
+                "required_capabilities": ["reminder.list"],
+                "expected_output": "The stored reminders with their due times and statuses.",
+                "verification_criteria": "The stored reminders are reported.",
+            },
+            {
+                "task_type": TaskType.REMINDER_CANCEL,
+                "task_name": "Cancel the reminder",
+                "description": "Cancel the pending reminder the request names.",
+                "required_capabilities": ["reminder.cancel"],
+                "expected_output": "The cancelled reminder.",
+                "verification_criteria": "The named reminder is no longer pending.",
+            },
+        ]
+
+        return templates
 
     # ------------------------------------------------------------------
     # Public API
@@ -652,6 +704,9 @@ class PlannerService:
         """Build a plan from the template registered for *intent*."""
         template = self._task_templates.get(intent.value, [])
 
+        if intent == IntentCategory.REMINDER:
+            template = self._reminder_template(request)
+
         plan = Plan(
             original_request=request,
             intent=intent.value,
@@ -695,6 +750,30 @@ class PlannerService:
         self._detect_unsupported_operations(plan, request)
 
         return plan
+
+    def _reminder_template(self, request: str) -> list[dict[str, Any]]:
+        """Return the reminder task shape that matches the request.
+
+        "Set a reminder for 7 AM", "list my reminders" and "cancel my
+        reminder" all belong to the same intent but call for different
+        capabilities. The wording decides which one, and the wording is
+        the user's own.
+
+        The order matters: a request that both mentions cancelling and
+        mentions a time is treated as a cancellation, because cancelling
+        is the action the verb names.
+        """
+        lowered = request.lower()
+        templates = self._task_templates.get(IntentCategory.REMINDER.value, [])
+        by_type = {
+            entry["task_type"]: entry for entry in templates
+        }
+
+        if any(word in lowered for word in _REMINDER_CANCEL_WORDS):
+            return [by_type[TaskType.REMINDER_CANCEL]]
+        if any(word in lowered for word in _REMINDER_LIST_WORDS):
+            return [by_type[TaskType.REMINDER_LIST]]
+        return [by_type[TaskType.REMINDER_CREATE]]
 
     def _apply_safety_rules(self, plan: Plan) -> None:
         """Flag tasks that require approval before they may be executed."""
@@ -763,8 +842,45 @@ class PlannerService:
                 "The recipient of the message was not identified in the request."
             )
 
+        if intent == IntentCategory.REMINDER:
+            self._detect_missing_reminder_information(plan, request)
+
         if not plan.tasks:
             plan.missing_information.append("No tasks could be derived for this intent.")
+
+    def _detect_missing_reminder_information(self, plan: Plan, request: str) -> None:
+        """Record what a reminder request did not supply.
+
+        A reminder without a time cannot be scheduled, and one without
+        anything to be reminded about is not a reminder. Both are reported
+        rather than filled in with a value NexusAI invented.
+        """
+        from nexusai.app.services.reminder_time import ReminderTimeError, parse_due_at
+
+        lowered = request.lower()
+        is_create = any(
+            task.task_type == TaskType.REMINDER_CREATE for task in plan.tasks
+        )
+        if not is_create:
+            return
+
+        try:
+            parse_due_at(request)
+        except ReminderTimeError as exc:
+            if exc.code == "ambiguous_time":
+                plan.missing_information.append(
+                    f"The time in the request is ambiguous ({exc}). "
+                    "Say whether it is in the morning or the evening."
+                )
+            else:
+                plan.missing_information.append(
+                    f"The request does not say when the reminder is due ({exc})."
+                )
+
+        if "remind" not in lowered and "alarm" not in lowered:
+            plan.missing_information.append(
+                "The request does not say what the reminder is about."
+            )
 
     def _detect_unsupported_operations(self, plan: Plan, request: str) -> None:
         """Record operations the request asks for that the planner cannot do."""

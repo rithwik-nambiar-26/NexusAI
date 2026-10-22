@@ -52,19 +52,29 @@ def test_tools_endpoint(client: TestClient):
     data = response.json()
     capabilities = {tool["capability"] for tool in data["tools"]}
     assert data["count"] == len(data["tools"])
-    # The three Day 4 document capabilities and the two data capabilities
-    # are always registered.
+    # The three Day 4 document capabilities, the two data capabilities and
+    # the three reminder capabilities are always registered.
     assert {
         "document.read",
         "document.extract",
         "llm.summarise",
         "data.load",
         "data.analyse",
+        "reminder.create",
+        "reminder.list",
+        "reminder.cancel",
     } <= capabilities
 
+    # The read-only capabilities run without approval. The capabilities
+    # that change state do not: a reminder is written on the user's
+    # behalf, so it is approved first.
     for tool in data["tools"]:
-        assert tool["requires_approval"] is False
-        assert tool["risk"] == "safe"
+        if tool["capability"] in ("reminder.create", "reminder.cancel"):
+            assert tool["requires_approval"] is True
+            assert tool["risk"] == "sensitive"
+        else:
+            assert tool["requires_approval"] is False
+            assert tool["risk"] == "safe"
         assert tool["input_fields"]
 
 

@@ -35,6 +35,7 @@ from nexusai.app.ui.pages import (
     data_intelligence,
     document_intelligence,
     overview,
+    reminders,
     run_history,
     system_status,
     task_automation,
@@ -43,6 +44,7 @@ from nexusai.app.ui.pages import (
 PAGE_MODULES: dict[str, Callable[[], None]] = {
     "overview": overview.render,
     "task_automation": task_automation.render,
+    "reminders": reminders.render,
     "document_intelligence": document_intelligence.render,
     "data_intelligence": data_intelligence.render,
     "run_history": run_history.render,
@@ -77,7 +79,7 @@ def main() -> None:
         st.divider()
         st.markdown(
             "Status: **Days 1–5 complete** &middot; "
-            "intent classification, planning, documents, execution &middot; "
+            "intent classification, planning, documents, execution, reminders &middot; "
             "Day 6 verification pending"
         )
         st.caption(f"Backend: `{API_BASE_URL}`")

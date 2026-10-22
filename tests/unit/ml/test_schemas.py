@@ -27,6 +27,7 @@ def test_intent_category_values():
         "infeasible",
         "out_of_scope",
         "channel_unavailable",
+        "reminder",
     }
     actual = {c.value for c in IntentCategory}
     assert actual == expected
@@ -42,6 +43,7 @@ def test_intent_category_supported():
     assert IntentCategory.COMMUNICATION in supported
     assert IntentCategory.DOCUMENT_EXTRACTION in supported
     assert IntentCategory.DOCUMENT_TRANSFORMATION in supported
+    assert IntentCategory.REMINDER in supported
     assert IntentCategory.DESTRUCTIVE_OPERATION not in supported
     assert IntentCategory.INVALID not in supported
     assert IntentCategory.INFEASIBLE not in supported

@@ -39,6 +39,11 @@ class TaskType(StrEnum):
     COMMUNICATION_SEND = "communication_send"
     COMMUNICATION_DRAFT = "communication_draft"
 
+    # Reminder operations
+    REMINDER_CREATE = "reminder_create"
+    REMINDER_LIST = "reminder_list"
+    REMINDER_CANCEL = "reminder_cancel"
+
     # Verification
     VERIFY_CONTENT = "verify_content"
     VERIFY_CALCULATION = "verify_calculation"
@@ -68,6 +73,9 @@ SUPPORTED_TASK_TYPES: frozenset[TaskType] = frozenset(
         TaskType.RESEARCH_SYNTHESISE,
         TaskType.COMMUNICATION_SEND,
         TaskType.COMMUNICATION_DRAFT,
+        TaskType.REMINDER_CREATE,
+        TaskType.REMINDER_LIST,
+        TaskType.REMINDER_CANCEL,
         TaskType.VERIFY_CONTENT,
         TaskType.VERIFY_CALCULATION,
     }
@@ -81,6 +89,8 @@ APPROVAL_REQUIRED_TASK_TYPES: frozenset[TaskType] = frozenset(
     {
         TaskType.DOCUMENT_WRITE,
         TaskType.COMMUNICATION_SEND,
+        TaskType.REMINDER_CREATE,
+        TaskType.REMINDER_CANCEL,
     }
 )
 

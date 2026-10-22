@@ -107,6 +107,15 @@ def derive_tool_inputs(
     if capability == "llm.summarise" and not resolved.get("question") and request.strip():
         resolved["question"] = request.strip()
 
+    if capability == "reminder.create" and request.strip():
+        # The request carries both what the reminder is about and when it
+        # is due. The time is parsed by the capability, so the whole
+        # request is offered and the capability reads the time out of it.
+        if not resolved.get("message"):
+            resolved["message"] = request.strip()
+        if not resolved.get("due_at"):
+            resolved["due_at"] = request.strip()
+
     return resolved
 
 

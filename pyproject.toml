@@ -32,6 +32,11 @@ dependencies = [
     "networkx>=3.0,<4.0",
     "pymupdf>=1.24,<2.0",
     "python-docx>=1.1,<2.0",
+    # Timezone support for reminders. `tzlocal` resolves the machine's
+    # local zone to an IANA name on every platform; `tzdata` is what
+    # `zoneinfo` reads on Windows, which ships no timezone database.
+    "tzlocal>=5.0,<7.0",
+    "tzdata>=2024.1; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]

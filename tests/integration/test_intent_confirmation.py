@@ -253,7 +253,13 @@ def test_classification_returns_ranked_candidates(client: TestClient):
     result = response.json()["result"]
     scores = result["all_scores"]
 
-    assert len(scores) == len(list(IntentCategory))
+    # The classifier scores the categories it was trained on. The
+    # taxonomy has one more category than the model, because the reminder
+    # capability was added after the model was trained; the classifier
+    # does not score it, and the confirmation flow does not offer it.
+    assert len(scores) == len(list(IntentCategory)) - 1
+    assert IntentCategory.REMINDER.value not in scores
+
     # The scores are ranked, and the top-ranked intent for this request is
     # the summarisation.
     ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)

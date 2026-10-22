@@ -38,9 +38,18 @@ def test_build_dataset_class_distribution():
     df = build_dataset()
     dist = get_class_distribution(df)
 
-    # All 12 intents should be present
-    assert len(dist) == 12
+    # Every intent in the taxonomy is represented, except the ones the
+    # classifier does not yet predict. The reminder category was added
+    # alongside the reminder capability; teaching the classifier to
+    # recognise it is research-checkpoint work, so the dataset is not
+    # padded with examples for it here.
+    not_in_dataset = {IntentCategory.REMINDER.value}
+
+    assert len(dist) == len(IntentCategory) - len(not_in_dataset)
     for cat in IntentCategory:
+        if cat.value in not_in_dataset:
+            assert cat.value not in dist
+            continue
         assert cat.value in dist
         assert dist[cat.value] >= 3  # At least 3 examples per class
 

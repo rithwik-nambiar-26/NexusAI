@@ -133,6 +133,7 @@ def render() -> None:
         st.session_state.pop("task_override_applied", None)
         st.session_state.pop("task_confirmed_intent", None)
         st.session_state.pop("task_intent_choice", None)
+        st.session_state.pop("task_approvals", None)
 
         # A supplied intent replaces the classifier's prediction.
         if override:
@@ -285,6 +286,10 @@ def render() -> None:
                     break
 
         st.session_state["task_plan"] = plan
+        # A new plan invalidates any approval granted for the old one.
+        st.session_state.pop("task_execution", None)
+        st.session_state.pop("task_run_id", None)
+        st.session_state.pop("task_approvals", None)
 
     plan = st.session_state.get("task_plan")
     if not plan:
@@ -303,7 +308,9 @@ def render() -> None:
     if st.button("Execute plan", type="primary", key="task_execute"):
         with st.spinner("Executing the plan..."):
             try:
-                execution = api_client.execute_plan(plan)
+                execution = api_client.execute_plan(
+                    plan, approvals=st.session_state.get("task_approvals") or []
+                )
             except api_client.ApiError as error:
                 show_api_error(error)
                 return
@@ -317,8 +324,67 @@ def render() -> None:
 
     show_execution_report(report)
 
+    # ------------------------------------------------------------------
+    # Approval
+    # ------------------------------------------------------------------
+    # A capability that changes state waits for an explicit decision. The
+    # approval is bound to the task and to its validated inputs, so it
+    # cannot be carried over to a different set of inputs.
+    pending = report.get("pending_approval_task_ids") or []
+    approvals = report.get("approvals") or []
+    if pending and approvals:
+        section += 1
+        st.divider()
+        st.subheader(f"{section} · Approval needed")
+
+        for approval in approvals:
+            if approval.get("state") != "pending":
+                continue
+            st.warning(
+                f"**{approval.get('capability')}** needs your approval before it "
+                f"runs."
+            )
+            st.caption(approval.get("reason") or "")
+            st.write(f"Task: `{approval.get('task_id')}`")
+
+            approve_column, deny_column = st.columns(2)
+            if approve_column.button(
+                "Approve", key=f"task_approve_{approval.get('task_id')}"
+            ):
+                _record_approval_decision(approval, granted=True)
+                st.rerun()
+            if deny_column.button(
+                "Deny", key=f"task_deny_{approval.get('task_id')}"
+            ):
+                _record_approval_decision(approval, granted=False)
+                st.rerun()
+
     if st.session_state.get("task_run_id"):
         st.caption(
             f"Saved as workflow run #{st.session_state['task_run_id']}. "
             "See the Run History page."
         )
+
+
+def _record_approval_decision(approval: dict, *, granted: bool) -> None:
+    """Record an approval decision and keep it for the next execution.
+
+    The decision is sent to the backend, which records it against the
+    report it is holding. The approved request is then re-sent with the
+    next execution, because the approval is bound to the task's inputs and
+    the executor checks that binding.
+    """
+    from nexusai.app.ui import api_client
+
+    try:
+        response = api_client.approve_task(
+            task_id=approval.get("task_id"),
+            granted=granted,
+        )
+    except api_client.ApiError as error:
+        show_api_error(error)
+        return
+
+    report = response.get("report") or {}
+    st.session_state["task_execution"] = report
+    st.session_state["task_approvals"] = report.get("approvals") or []

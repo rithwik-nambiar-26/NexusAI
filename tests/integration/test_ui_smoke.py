@@ -467,3 +467,58 @@ def test_a_new_request_clears_a_previous_confirmation(app_test, monkeypatch):
 
     assert "task_confirmed_intent" not in at.session_state
     assert "Intent confirmed by you" not in _body(at)
+
+
+# ---------------------------------------------------------------------------
+# The Reminders page
+# ---------------------------------------------------------------------------
+
+
+def test_reminders_page_states_the_delivery_limitation(app_test, monkeypatch):
+    """The page must say that a reminder needs NexusAI to be running."""
+    from nexusai.app.ui import api_client
+
+    monkeypatch.setattr(
+        api_client, "list_reminders", lambda *a, **k: {"reminders": [], "count": 0}
+    )
+
+    at = app_test.run()
+    at.radio[0].set_value("Reminders").run()
+
+    body = _body(at)
+    # The limitation is stated, not implied.
+    assert "only while NexusAI is running" in body
+    assert "missed" in body
+    # And the fact that no operating-system job is registered is stated.
+    assert "Windows" in body
+
+
+def test_reminders_page_lists_stored_reminders(app_test, monkeypatch):
+    """A stored reminder is shown with its due time and status."""
+    from nexusai.app.ui import api_client
+
+    monkeypatch.setattr(
+        api_client,
+        "list_reminders",
+        lambda *a, **k: {
+            "reminders": [
+                {
+                    "id": 1,
+                    "message": "Team standup",
+                    "due_at": "2026-10-23T03:30:00+00:00",
+                    "local_due_at": "2026-10-23T09:00:00+05:30",
+                    "timezone": "Asia/Kolkata",
+                    "status": "pending",
+                }
+            ],
+            "count": 1,
+        },
+    )
+
+    at = app_test.run()
+    at.radio[0].set_value("Reminders").run()
+
+    body = _body(at)
+    assert "Team standup" in body
+    assert "pending" in body
+    assert "2026-10-23T09:00:00+05:30" in body

@@ -66,7 +66,7 @@ def test_list_intents_endpoint(client: TestClient):
     assert "request_id" in data
 
     intents = data["intents"]
-    assert len(intents) == 12
+    assert len(intents) == 13
 
     # Check structure
     for intent in intents:

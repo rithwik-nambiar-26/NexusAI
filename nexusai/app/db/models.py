@@ -84,3 +84,36 @@ class ExecutionStep(Base):
             f"<ExecutionStep(run_id={self.run_id}, step_index={self.step_index}, "
             f"tool={self.tool!r}, verification={self.verification_result!r})>"
         )
+
+
+class Reminder(Base):
+    """A reminder the user asked NexusAI to keep.
+
+    The due time is stored in UTC. The timezone the user expressed it in is
+    stored alongside it, so the reminder can be reported back in the time
+    the user thinks in, and so a change in daylight saving applies to the
+    local representation rather than to the instant itself.
+    """
+
+    __tablename__ = "reminders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+    fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    missed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"<Reminder(id={self.id}, status={self.status!r}, "
+            f"due_at={self.due_at!r}, message={self.message!r})>"
+        )

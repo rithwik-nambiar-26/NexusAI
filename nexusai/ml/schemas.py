@@ -30,6 +30,12 @@ class IntentCategory(StrEnum):
     COMMUNICATION = "communication"
     DOCUMENT_EXTRACTION = "document_extraction"
     DOCUMENT_TRANSFORMATION = "document_transformation"
+    #: Keep a reminder for the user. This category is reachable through an
+    #: explicit intent selection; the trained classifier does not cover it
+    #: yet, because the classifier's training set predates the reminder
+    #: capability. Covering it in the classifier is part of the research
+    #: checkpoint, not a change made alongside the capability.
+    REMINDER = "reminder"
 
     # Special handling categories (require human approval or refusal)
     DESTRUCTIVE_OPERATION = "destructive_operation"
@@ -49,6 +55,7 @@ class IntentCategory(StrEnum):
             cls.COMMUNICATION,
             cls.DOCUMENT_EXTRACTION,
             cls.DOCUMENT_TRANSFORMATION,
+            cls.REMINDER,
         ]
 
     @classmethod

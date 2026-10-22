@@ -39,6 +39,8 @@ class ToolPermission(StrEnum):
     READ_DOCUMENT = "read_document"
     #: Write or modify a file.
     WRITE_DOCUMENT = "write_document"
+    #: Write a record to the local database on the user's behalf.
+    WRITE_DATABASE = "write_database"
     #: Send a message to an external recipient.
     SEND_COMMUNICATION = "send_communication"
     #: Perform a destructive operation.
