@@ -87,7 +87,7 @@ def test_the_sections_are_separated():
     )
 
     names = [section.name for section in summary.sections]
-    assert names == ["overview", "decisions", "action_items"]
+    assert names == ["overview", "decisions", "action_items", "values"]
     assert summary.sufficient is True
 
 

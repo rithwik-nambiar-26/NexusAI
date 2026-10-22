@@ -229,16 +229,26 @@ they are all read-only.
 retried before giving up. Harmless for the current tool set, but worth
 noting for future write-capable tools.
 
-### 2.10 Answers are extractive by default; the summary is structured
+### 2.10 The summary separates documents, and only reports what the source supports
 
 Answers are always assembled from sentences in the source text. No new
 prose is generated.
 
-Summaries are structured into an overview, the decisions and the action
-items. The sections come from the document's own headings, and the items
-are copied from the source. An action item's owner and due date are read
-from the table that states them and are never inferred; a sentence that
-does not record a decision is not reported as one.
+Summaries are structured into an overview, the decisions, the action
+items and the key values. The sections come from the document's own
+headings, and the items are copied from the source.
+
+**A table is an action table only when its header says so**: it names an
+action column, or it names both an owner and a due column. A table of
+operating limits or of parameters is not an action table, so its rows are
+never reported as tasks; they are reported as key values, with each field
+kept with its own values. The owner and the due date are read from the
+columns that name them and are never inferred from a neighbouring cell. A
+sentence that does not record a decision is not reported as one, and a
+document that records no decision says so rather than being given one.
+
+A section the document does not support is reported as empty, with a note
+saying so.
 
 A local language model may be used for the summary when one is
 configured (`NEXUSAI_OLLAMA_BASE_URL` and `NEXUSAI_OLLAMA_MODEL`) and is
@@ -387,6 +397,17 @@ summarised under its own heading. The documents are never blended into
 one narrative, because a reader would have no way to tell which document
 a statement came from. The capabilities report the documents they
 actually read, so a mismatch is visible rather than silent.
+
+Retrieval is hybrid. The vector search finds the passages that look
+similar to the query whatever their wording; the results are then ranked
+by a weighted term overlap with the query, over the passage's text and
+its heading, so a distinctive term counts for more than one that every
+document shares and a passage under a heading such as "Warranty" is
+recognised as relevant to a question about warranties. When the scope
+names several documents, each is given a share of the results, so one
+document cannot take every slot on the strength of a common word. A
+request that names a file is scoped to that file, because the words in
+such a request are often the boilerplate every document shares.
 
 A plan is bound to the request and the documents it was built from.
 Changing either makes the plan stale, and a stale plan is not executed.

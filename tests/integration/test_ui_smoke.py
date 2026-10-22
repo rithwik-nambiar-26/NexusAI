@@ -773,3 +773,139 @@ def test_a_stale_plan_cannot_be_executed_after_the_request_changes(
     body = _body(at)
     assert "out of date" in body
     assert executed == []
+
+def test_the_cross_document_summary_is_rendered_per_document(app_test, monkeypatch):
+    """A cross-document summary shows each document under its own heading.
+
+    The defect was that the summary blended the two documents and that a
+    table of operating limits was reported as action items.
+    """
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.3,
+            "status": "clarification_required",
+            "all_scores": {
+                "document_summarisation": 0.3,
+                "document_question_answering": 0.2,
+            },
+        }
+    }
+    documents = {
+        "documents": [
+            {"name": "meeting_notes.md", "document_id": "doc_meeting"},
+            {"name": "product_manual.md", "document_id": "doc_manual"},
+        ]
+    }
+
+    def fake_create_plan(*args, **kwargs):
+        return {
+            "plan": {
+                "plan_id": "plan_1",
+                "intent": "document_summarisation",
+                "plan_status": "ready",
+                "requires_approval": False,
+                "source": "explicit",
+                "source_documents": ["doc_meeting", "doc_manual"],
+                "tasks": [],
+                "dependencies": [],
+                "execution_order": [],
+                "parallel_levels": [],
+                "missing_information": [],
+                "unsupported_operations": [],
+                "validation_errors": [],
+                "clarification_required": False,
+                "clarification_question": None,
+            }
+        }
+
+    summary_output = {
+        "method": "extractive",
+        "status": "answered",
+        "summary_text": "Overview - meeting_notes.md\n- Date",
+        "sections": [
+            {
+                "name": "overview",
+                "title": "Overview - meeting_notes.md",
+                "document_id": "doc_meeting",
+                "note": None,
+                "items": [
+                    {
+                        "text": "Date: 2026-10-12",
+                        "source_reference": "meeting_notes.md | §Notes",
+                        "owner": None,
+                        "due": None,
+                        "document_id": "doc_meeting",
+                        "fields": {},
+                    }
+                ],
+            },
+            {
+                "name": "values",
+                "title": "Key values - product_manual.md",
+                "document_id": "doc_manual",
+                "note": None,
+                "items": [
+                    {
+                        "text": "Parameter: Operating temperature; Minimum: 0; Maximum: 40",
+                        "source_reference": "product_manual.md | §5. Operating limits",
+                        "owner": None,
+                        "due": None,
+                        "document_id": "doc_manual",
+                        "fields": {"Parameter": "Operating temperature"},
+                    }
+                ],
+            },
+        ],
+        "citations": [],
+        "evidence": [],
+        "documents": ["doc_meeting", "doc_manual"],
+    }
+
+    def fake_execute_plan(plan, **kwargs):
+        return {
+            "report": {
+                "status": "partially_completed",
+                "task_results": [
+                    {
+                        "task_id": "t1",
+                        "capability": "llm.summarise",
+                        "status": "completed",
+                        "output": summary_output,
+                    }
+                ],
+            }
+        }
+
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: documents)
+    monkeypatch.setattr(api_client, "create_plan", fake_create_plan)
+    monkeypatch.setattr(api_client, "execute_plan", fake_execute_plan)
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise both documents.").run()
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    _intent_radio(at).set_value("document summarisation (0.300)").run()
+    confirm_button = next(b for b in at.button if b.label == "Confirm this intent")
+    at = confirm_button.click().run()
+
+    # Cross-document analysis is an explicit choice.
+    at.checkbox[0].set_value(True).run()
+    generate_button = next(b for b in at.button if b.label == "Generate plan")
+    at = generate_button.click().run()
+    execute_button = next(b for b in at.button if b.label == "Execute plan")
+    at = execute_button.click().run()
+
+    body = _body(at)
+    # Each document has its own heading.
+    assert "Overview - meeting_notes.md" in body
+    assert "Key values - product_manual.md" in body
+    # The values are reported with their field.
+    assert "Operating temperature" in body

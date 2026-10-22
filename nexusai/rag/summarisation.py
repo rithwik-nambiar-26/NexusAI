@@ -12,17 +12,25 @@ actually wants:
 * **Decisions** — the statements in the text that record a decision.
 * **Action items** — what someone is to do, with the owner and the due
   date when the text states them.
+* **Key values** — the rows of a table that is not an action table, with
+  each field kept with its own values.
 
-The classification of a sentence is made by explicit patterns, and the
-patterns are narrow. A sentence that is not recognised as a decision is
-not reported as one. An action item with no stated owner has no owner
-field; the summariser never infers one.
+**An action item is only an action item when the source says so.** A
+table is an action table only when its header names an action column, or
+names both an owner and a due column. A specification table — a table of
+operating limits, of parameters, of prices — is not an action table, and
+its rows are never reported as tasks. The owner and the due date are
+read from the columns that name them, and are never inferred from a
+neighbouring cell.
 
 **One document is summarised at a time.** A summary is built per
 document and the documents are kept apart. Two documents are never
 blended into a single narrative, because a reader would have no way to
 tell which document a statement came from. When more than one document
 is in scope, each is summarised under its own heading.
+
+A section that the document does not support is reported as empty, with
+a note saying so, rather than being filled with something else.
 """
 
 from __future__ import annotations
@@ -37,10 +45,13 @@ from nexusai.rag.schemas import DocumentSection, EvidenceSpan
 OVERVIEW = "overview"
 DECISIONS = "decisions"
 ACTION_ITEMS = "action_items"
+VALUES = "values"
 
 #: Headings whose content is reported as action items rather than as
 #: overview material.
-_ACTION_ITEM_HEADINGS = frozenset({"action item", "action items", "tasks", "to do", "todo"})
+_ACTION_ITEM_HEADINGS = frozenset(
+    {"action item", "action items", "action points", "tasks", "to do", "todo", "next steps"}
+)
 
 #: Headings whose content describes what the document is.
 _OVERVIEW_HEADINGS = frozenset(
@@ -51,7 +62,6 @@ _OVERVIEW_HEADINGS = frozenset(
         "overview",
         "summary",
         "next meeting",
-        "next steps",
         "purpose",
         "scope",
     }
@@ -74,22 +84,20 @@ _DECISION_PATTERNS = (
     re.compile(r"\bthere (?:was|were) no other business\b", re.IGNORECASE),
 )
 
-#: Patterns that mark a statement as an action item. An action item says
-#: what is to be done, usually with a named owner.
-_ACTION_PATTERNS = (
-    re.compile(r"\b(?:will|shall|must|to|should)\s+\w+", re.IGNORECASE),
-    re.compile(r"\baction item\b", re.IGNORECASE),
-    re.compile(r"\b(?:owner|assigned to|responsible for|due by|due date|deadline)\b", re.IGNORECASE),
-)
-
-#: A table header that names the columns of an action-item table.
-_ACTION_TABLE_HEADERS = ("action item", "action", "task", "owner", "due")
-
 #: A row of a Markdown table: cells separated by pipes.
 _TABLE_ROW_RE = re.compile(r"^\s*\|(?P<cells>.+)\|\s*$")
 
 #: A Markdown table separator row, which carries no content.
 _TABLE_SEPARATOR_RE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+#: A column header that names the action itself.
+_ACTION_COLUMN_NAMES = ("action item", "action", "task", "item", "deliverable", "activity")
+
+#: A column header that names the owner of an action.
+_OWNER_COLUMN_NAMES = ("owner", "responsible", "assignee", "assigned to", "who")
+
+#: A column header that names when an action is due.
+_DUE_COLUMN_NAMES = ("due", "deadline", "by when", "due date", "target date")
 
 #: An owner stated as a name near an action item.
 _OWNER_RE = re.compile(
@@ -109,6 +117,12 @@ _DUE_RE = re.compile(
 #: Sentence splitting.
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
+#: A metadata line such as ``**Date:** 2026-10-12``.
+_METADATA_LINE_RE = re.compile(r"^\*\*(?P<label>[^*]+):\*\*")
+
+#: A list item.
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+
 
 @dataclass
 class SummaryItem:
@@ -120,6 +134,9 @@ class SummaryItem:
         owner: The owner, when the source states one.
         due: The due date, when the source states one.
         document_id: The document the item came from.
+        fields: The field and value pairs of the row, when the item came
+            from a table. The relationship between a field and its values
+            is kept, rather than being flattened into a sentence.
     """
 
     text: str
@@ -127,6 +144,7 @@ class SummaryItem:
     owner: str | None = None
     due: str | None = None
     document_id: str = ""
+    fields: dict[str, str] = field(default_factory=dict)
     score: float = 0.0
 
 
@@ -140,12 +158,15 @@ class SummarySection:
         items: The items in the section.
         document_id: The document the section describes, when it describes
             one.
+        note: An explanation, used when the section is empty because the
+            document does not support it.
     """
 
     name: str
     title: str
     items: list[SummaryItem] = field(default_factory=list)
     document_id: str = ""
+    note: str | None = None
 
 
 @dataclass
@@ -181,6 +202,9 @@ class StructuredSummary:
         lines: list[str] = []
         for section in self.sections:
             if not section.items:
+                if section.note:
+                    lines.append(f"{section.title}: {section.note}")
+                    lines.append("")
                 continue
             lines.append(f"{section.title}:")
             for item in section.items:
@@ -239,8 +263,9 @@ def _summary_from_groups(
 
     A section's heading states what the text under it is. The summary
     keeps that structure: the text before the first content heading is
-    the overview, sentences recording a decision are the decisions, and
-    the rows of an action-item table are the action items.
+    the overview, sentences recording a decision are the decisions, the
+    rows of an action table are the action items, and the rows of any
+    other table are kept as field and value pairs.
     """
     summary_sections: list[SummarySection] = []
     documents: list[str] = []
@@ -251,32 +276,40 @@ def _summary_from_groups(
         documents.append(document_id)
         label = f" — {document_name}" if document_name else ""
 
-        overview = _overview_from_sections(sections, document_id)
-        decisions = _decisions_from_sections(sections, document_id)
-        actions = _actions_from_sections(sections, document_id)
-
         summary_sections.append(
             SummarySection(
                 name=OVERVIEW,
                 title=f"Overview{label}",
-                items=overview,
+                items=_overview_from_sections(sections, document_id),
                 document_id=document_id,
+                note="The document does not say what it is about.",
             )
         )
         summary_sections.append(
             SummarySection(
                 name=DECISIONS,
                 title=f"Decisions{label}",
-                items=decisions,
+                items=_decisions_from_sections(sections, document_id),
                 document_id=document_id,
+                note="No decision is recorded in this document.",
             )
         )
         summary_sections.append(
             SummarySection(
                 name=ACTION_ITEMS,
                 title=f"Action items{label}",
-                items=actions,
+                items=_actions_from_sections(sections, document_id),
                 document_id=document_id,
+                note="This document records no action items.",
+            )
+        )
+        summary_sections.append(
+            SummarySection(
+                name=VALUES,
+                title=f"Key values{label}",
+                items=_values_from_sections(sections, document_id),
+                document_id=document_id,
+                note="This document records no values in a table.",
             )
         )
 
@@ -329,6 +362,7 @@ def _summary_from_evidence_by_document(
                 title=f"Overview{label}",
                 items=_overview_items(spans, document_id),
                 document_id=document_id,
+                note="The document does not say what it is about.",
             )
         )
         summary_sections.append(
@@ -337,6 +371,7 @@ def _summary_from_evidence_by_document(
                 title=f"Decisions{label}",
                 items=_items_matching(spans, _DECISION_PATTERNS, document_id),
                 document_id=document_id,
+                note="No decision is recorded in this document.",
             )
         )
         summary_sections.append(
@@ -345,6 +380,16 @@ def _summary_from_evidence_by_document(
                 title=f"Action items{label}",
                 items=_action_items(spans, document_id),
                 document_id=document_id,
+                note="This document records no action items.",
+            )
+        )
+        summary_sections.append(
+            SummarySection(
+                name=VALUES,
+                title=f"Key values{label}",
+                items=_values_from_spans(spans, document_id),
+                document_id=document_id,
+                note="This document records no values in a table.",
             )
         )
 
@@ -364,6 +409,51 @@ def _summary_from_evidence_by_document(
         sufficient=True,
         documents=documents,
     )
+
+
+# ---------------------------------------------------------------------------
+# Reading the source
+# ---------------------------------------------------------------------------
+
+
+def _blocks(text: str) -> list[str]:
+    """Return the logical blocks of *text*.
+
+    A block is a paragraph, a list item, a table row or a metadata line.
+    A line that continues the previous one — the soft wrapping Markdown
+    uses — is joined to it, so a sentence or a field is never cut in
+    half and its text is never silently dropped.
+    """
+    blocks: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if current:
+            blocks.append(" ".join(part.strip() for part in current if part.strip()))
+            current.clear()
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            flush()
+            continue
+        if (
+            _TABLE_ROW_RE.match(line)
+            or _LIST_ITEM_RE.match(line)
+            or _METADATA_LINE_RE.match(line)
+        ):
+            flush()
+            current.append(line)
+            continue
+        current.append(line)
+    flush()
+
+    # A list marker carries no meaning once the line is reported on its
+    # own, and the emphasis around a metadata label is not part of it.
+    for index, block in enumerate(blocks):
+        blocks[index] = _clean(block)
+
+    return [block for block in blocks if block]
 
 
 def _overview_from_sections(
@@ -389,8 +479,8 @@ def _overview_from_sections(
 
         if _is_overview_heading(heading):
             # A list under a heading such as "Attendees" or "Agenda" is
-            # reported line by line, so the items stay separate.
-            for line in _content_lines(section.text):
+            # reported item by item, so the items stay separate.
+            for line in _blocks(section.text):
                 if line in seen:
                     continue
                 seen.add(line)
@@ -404,7 +494,7 @@ def _overview_from_sections(
                 )
             continue
 
-        for line in _content_lines(section.text):
+        for line in _blocks(section.text):
             if line in seen:
                 continue
             if _is_metadata_line(line):
@@ -460,11 +550,13 @@ def _actions_from_sections(
 ) -> list[SummaryItem]:
     """Return the action items stated in the document.
 
-    A table whose header names an action-item column is read row by row.
-    The header is used to work out which column holds the action, which
-    the owner and which the due date, so a table whose first column is
-    only a row number is read correctly. The values are copied from the
-    row; none of them is inferred.
+    A table is an action table only when its header names an action
+    column, or names both an owner and a due column. Only the rows of
+    such a table are action items; a table of parameters or operating
+    limits is not, and is reported as key values instead.
+
+    The action, the owner and the due date are read from the columns that
+    name them. None of them is inferred.
     """
     items: list[SummaryItem] = []
     seen: set[str] = set()
@@ -472,8 +564,9 @@ def _actions_from_sections(
     for section in sections:
         reference = _reference_for(section)
         columns: dict[str, int] = {}
+        is_action_table = False
 
-        for line in _content_lines(section.text):
+        for line in _blocks(section.text):
             row = _TABLE_ROW_RE.match(line)
             if not row:
                 continue
@@ -484,8 +577,15 @@ def _actions_from_sections(
                 continue
 
             if _is_action_header(cells):
-                # The header names the columns; it is not itself an item.
+                # The header names the columns; the rows that follow are
+                # the action items.
                 columns = _action_columns(cells)
+                is_action_table = True
+                continue
+
+            if not is_action_table:
+                # A table that is not an action table. Its rows are
+                # reported as key values, not as tasks.
                 continue
 
             text = _action_text(cells, columns)
@@ -506,21 +606,151 @@ def _actions_from_sections(
     return items
 
 
+def _values_from_sections(
+    sections: list[DocumentSection],
+    document_id: str = "",
+) -> list[SummaryItem]:
+    """Return the rows of the tables that are not action tables.
+
+    A specification table — operating limits, parameters, prices — is
+    worth reporting, but not as a list of tasks. Each row keeps its
+    field and its own values, so the relationship between them is not
+    lost.
+    """
+    items: list[SummaryItem] = []
+    seen: set[str] = set()
+
+    for section in sections:
+        reference = _reference_for(section)
+        header: list[str] | None = None
+
+        for line in _blocks(section.text):
+            row = _TABLE_ROW_RE.match(line)
+            if not row:
+                continue
+            cells = [cell.strip() for cell in row.group("cells").split("|")]
+            if not cells or all(not cell for cell in cells):
+                continue
+            if all(_is_separator_cell(cell) for cell in cells):
+                continue
+
+            if header is None:
+                header = cells
+                if _is_action_header(cells):
+                    # An action table is reported as action items, not as
+                    # key values.
+                    break
+                continue
+
+            fields = {
+                name: value for name, value in zip(header, cells, strict=False) if name
+            }
+            text = _row_text(header, cells)
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            items.append(
+                SummaryItem(
+                    text=text,
+                    source_reference=reference,
+                    document_id=document_id,
+                    fields=fields,
+                    score=1.0,
+                )
+            )
+
+    return items
+
+
+def _values_from_spans(
+    evidence: list[EvidenceSpan],
+    document_id: str = "",
+) -> list[SummaryItem]:
+    """Return the rows of the tables that are not action tables."""
+    items: list[SummaryItem] = []
+    seen: set[str] = set()
+
+    for span in evidence:
+        header: list[str] | None = None
+        for line in _blocks(span.text):
+            row = _TABLE_ROW_RE.match(line)
+            if not row:
+                continue
+            cells = [cell.strip() for cell in row.group("cells").split("|")]
+            if not cells or all(not cell for cell in cells):
+                continue
+            if all(_is_separator_cell(cell) for cell in cells):
+                continue
+            if header is None:
+                header = cells
+                if _is_action_header(cells):
+                    break
+                continue
+            fields = {
+                name: value for name, value in zip(header, cells, strict=False) if name
+            }
+            text = _row_text(header, cells)
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            items.append(
+                SummaryItem(
+                    text=text,
+                    source_reference=span.source_reference,
+                    document_id=document_id or span.document_id,
+                    fields=fields,
+                    score=span.score,
+                )
+            )
+
+    return items
+
+
+def _row_text(header: list[str], cells: list[str]) -> str:
+    """Render a table row as a field and its values.
+
+    The first cell names the field and the rest are its values, so the
+    relationship between them is kept.
+    """
+    if not header:
+        return ""
+    pairs = [
+        f"{name}: {value}"
+        for name, value in zip(header, cells, strict=False)
+        if name and value
+    ]
+    return "; ".join(pairs)
+
+
+# ---------------------------------------------------------------------------
+# Table columns
+# ---------------------------------------------------------------------------
+
+
+def _is_action_header(cells: list[str]) -> bool:
+    """True when the cells are the header of an action-item table.
+
+    A table is an action table only when it says so: its header names an
+    action column, or names both an owner and a due column. A table of
+    parameters or operating limits names none of those and is not an
+    action table.
+    """
+    columns = _action_columns(cells)
+    if "action" in columns:
+        return True
+    return "owner" in columns and "due" in columns
+
+
 def _action_columns(header: list[str]) -> dict[str, int]:
     """Return which column holds the action, the owner and the due date."""
     columns: dict[str, int] = {}
     for index, cell in enumerate(header):
         lowered = cell.lower().strip()
-        if "owner" in lowered or "responsible" in lowered or "assignee" in lowered:
+        if any(name in lowered for name in _OWNER_COLUMN_NAMES):
             columns.setdefault("owner", index)
-        elif "due" in lowered or "deadline" in lowered or "by when" in lowered:
+        elif any(name in lowered for name in _DUE_COLUMN_NAMES):
             columns.setdefault("due", index)
-        elif (
-            "action" in lowered
-            or "task" in lowered
-            or "item" in lowered
-            or "description" in lowered
-        ):
+        elif any(name in lowered for name in _ACTION_COLUMN_NAMES):
             columns.setdefault("action", index)
     return columns
 
@@ -540,21 +770,47 @@ def _action_text(cells: list[str], columns: dict[str, int]) -> str:
     return cells[0].strip() if cells else ""
 
 
+def _find_owner(cells: list[str], columns: dict[str, int] | None = None) -> str | None:
+    """Return the owner stated in a table row, if there is one.
+
+    The owner comes from the column that names it. When the table has no
+    owner column there is no owner: a neighbouring cell is not one.
+    """
+    columns = columns or {}
+    index = columns.get("owner")
+    if index is None:
+        return None
+    if index >= len(cells):
+        return None
+    owner = cells[index].strip()
+    return owner or None
+
+
+def _find_due(cells: list[str], columns: dict[str, int] | None = None) -> str | None:
+    """Return the due date stated in a table row, if there is one.
+
+    The date comes from the column that names it.
+    """
+    columns = columns or {}
+    index = columns.get("due")
+    if index is None:
+        return None
+    if index >= len(cells):
+        return None
+    due = cells[index].strip()
+    return due or None
+
+
+# ---------------------------------------------------------------------------
+# Text helpers
+# ---------------------------------------------------------------------------
+
+
 def _reference_for(section: DocumentSection) -> str:
     """Return a readable citation for a document section."""
     if section.heading:
         return f"§{section.heading}"
     return "document"
-
-
-def _content_lines(text: str) -> list[str]:
-    """Return the non-empty lines of *text*, cleaned."""
-    lines: list[str] = []
-    for raw in text.splitlines():
-        line = _clean(raw)
-        if line:
-            lines.append(line)
-    return lines
 
 
 def _clean(text: str) -> str:
@@ -577,7 +833,7 @@ def _is_overview_heading(heading: str) -> bool:
 
 def _is_metadata_line(line: str) -> bool:
     """True when the line states what the document is, rather than content."""
-    return bool(re.match(r"^\*\*(?P<label>[^*]+):\*\*", line)) or bool(
+    return bool(_METADATA_LINE_RE.match(line)) or bool(
         re.match(r"^(?P<label>[A-Z][\w ]{1,30}):\s+\S", line)
     )
 
@@ -585,59 +841,6 @@ def _is_metadata_line(line: str) -> bool:
 def _is_separator_cell(cell: str) -> bool:
     """True when the cell is part of a table's separator row."""
     return bool(re.fullmatch(r"[\s:|-]+", cell)) and bool(re.search(r"[-:]", cell))
-
-
-def _is_action_header(cells: list[str]) -> bool:
-    """True when the cells look like an action-item table's header."""
-    lowered = [cell.lower() for cell in cells]
-    return any(
-        any(header in cell for header in _ACTION_TABLE_HEADERS) for cell in lowered
-    )
-
-
-def _find_owner(cells: list[str], columns: dict[str, int] | None = None) -> str | None:
-    """Return the owner stated in a table row, if there is one.
-
-    When the header named an owner column, that cell is used. Otherwise a
-    cell that looks like a person's name is used.
-    """
-    columns = columns or {}
-    index = columns.get("owner")
-    if index is not None and index < len(cells):
-        owner = cells[index].strip()
-        return owner or None
-
-    for cell in cells:
-        cleaned = cell.strip()
-        if not cleaned:
-            continue
-        # A cell that looks like a name, and is not a date.
-        if _DUE_RE.search(cleaned):
-            continue
-        if re.fullmatch(r"[A-Z][\w.'-]*(?:\s+[A-Z][\w.'-]*){0,2}", cleaned):
-            return cleaned
-    return None
-
-
-def _find_due(cells: list[str], columns: dict[str, int] | None = None) -> str | None:
-    """Return the due date stated in a table row, if there is one."""
-    columns = columns or {}
-    index = columns.get("due")
-    if index is not None and index < len(cells):
-        due = cells[index].strip()
-        if due:
-            return due
-
-    for cell in cells:
-        cleaned = cell.strip()
-        if not cleaned:
-            continue
-        match = _DUE_RE.search(cleaned)
-        if match:
-            return match.group("due").strip()
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", cleaned):
-            return cleaned
-    return None
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -726,28 +929,37 @@ def _items_matching(
 def _action_items(evidence: list[EvidenceSpan], document_id: str = "") -> list[SummaryItem]:
     """Return the action items stated in the evidence.
 
-    Two forms are recognised: a row of a Markdown table whose header
-    names an action-item column, and a sentence that states an action
-    with an owner. The owner and the due date are copied from the text;
-    neither is inferred.
+    A table is an action table only when its header says so. A sentence
+    is an action item only when it states an action and names an owner.
     """
     items: list[SummaryItem] = []
     seen: set[str] = set()
 
     for span in evidence:
-        lines = span.text.splitlines()
+        header: list[str] | None = None
+        is_action_table = False
+        columns: dict[str, int] = {}
 
-        for line in lines:
+        for line in _blocks(span.text):
             row = _TABLE_ROW_RE.match(line)
             if not row:
                 continue
             cells = [cell.strip() for cell in row.group("cells").split("|")]
-            if any(_TABLE_SEPARATOR_RE.match(cell) for cell in cells):
+            if not cells or all(not cell for cell in cells):
                 continue
-            if _is_action_header(cells):
+            if all(_is_separator_cell(cell) for cell in cells):
                 continue
 
-            text = _action_text(cells, _action_columns(cells))
+            if header is None:
+                header = cells
+                is_action_table = _is_action_header(cells)
+                columns = _action_columns(cells)
+                continue
+
+            if not is_action_table:
+                continue
+
+            text = _action_text(cells, columns)
             if not text or text in seen:
                 continue
             seen.add(text)
@@ -755,31 +967,8 @@ def _action_items(evidence: list[EvidenceSpan], document_id: str = "") -> list[S
                 SummaryItem(
                     text=text,
                     source_reference=span.source_reference,
-                    owner=_find_owner(cells),
-                    due=_find_due(cells),
-                    document_id=document_id or span.document_id,
-                    score=span.score,
-                )
-            )
-
-    # Sentences that state an action with an owner.
-    for span in evidence:
-        for sentence in _split_sentences(span.text):
-            if sentence in seen:
-                continue
-            if not any(pattern.search(sentence) for pattern in _ACTION_PATTERNS):
-                continue
-            owner_match = _OWNER_RE.search(sentence)
-            if not owner_match:
-                continue
-            due_match = _DUE_RE.search(sentence)
-            seen.add(sentence)
-            items.append(
-                SummaryItem(
-                    text=sentence,
-                    source_reference=span.source_reference,
-                    owner=owner_match.group("owner").strip(),
-                    due=due_match.group("due").strip() if due_match else None,
+                    owner=_find_owner(cells, columns),
+                    due=_find_due(cells, columns),
                     document_id=document_id or span.document_id,
                     score=span.score,
                 )
@@ -796,6 +985,7 @@ def to_dict(summary: StructuredSummary) -> dict[str, Any]:
                 "name": section.name,
                 "title": section.title,
                 "document_id": section.document_id,
+                "note": section.note,
                 "items": [
                     {
                         "text": item.text,
@@ -803,6 +993,7 @@ def to_dict(summary: StructuredSummary) -> dict[str, Any]:
                         "owner": item.owner,
                         "due": item.due,
                         "document_id": item.document_id,
+                        "fields": item.fields,
                     }
                     for item in section.items
                 ],

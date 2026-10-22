@@ -76,6 +76,16 @@ _POLICY_STATUS: dict[str, ExtractionStatus] = {
 #: Default number of chunks to retrieve per query.
 DEFAULT_TOP_K = 5
 
+#: How many candidates the vector search returns for every result that is
+#: kept. The re-ranking needs candidates to choose from, so the search is
+#: broader than the number of results.
+_CANDIDATE_MULTIPLIER = 5
+
+#: How many chunks of a document the summary may draw its evidence from.
+#: A summary covers the document, not only the passages that happen to
+#: match the request's wording.
+SUMMARY_COVERAGE_LIMIT = 60
+
 #: Fraction of the top result's score that a passage must reach to be
 #: treated as supporting evidence. This is relative rather than absolute
 #: so the rule behaves the same way under embedders whose score scale
@@ -395,6 +405,20 @@ class DocumentIntelligenceService:
     ) -> list[RetrievedChunk]:
         """Retrieve the chunks most relevant to a query.
 
+        Retrieval is hybrid. The vector search provides recall: it finds
+        the passages that look similar to the query whatever their
+        wording. The results are then re-ranked by a weighted term
+        overlap with the query, which provides precision: a term that
+        occurs in many chunks counts for less than a distinctive one, and
+        a chunk's heading counts towards the match, so a passage under a
+        heading such as "Warranty" is recognised as relevant to a
+        question about warranties.
+
+        When the scope names more than one document, each document is
+        given its share of the results. Without that, a single document
+        can take every slot on the strength of a common word, and the
+        other documents are silently absent from the answer.
+
         Args:
             query: The query text.
             top_k: Maximum number of results.
@@ -402,18 +426,43 @@ class DocumentIntelligenceService:
             document_ids: Restrict retrieval to these documents.
 
         Returns:
-            Retrieved chunks ordered by descending score.
+            Retrieved chunks ordered by descending relevance.
         """
         if not query.strip() or not len(self.store):
             return []
 
         vector = self.embedder.embed([query])[0]
-        return self.store.search(
+
+        # The vector search is broad, so the re-ranking has candidates to
+        # choose from. It is not the final ordering.
+        candidates = self.store.search(
             vector,
-            top_k=top_k,
+            top_k=top_k * _CANDIDATE_MULTIPLIER,
             min_score=min_score,
             document_ids=document_ids,
         )
+        if not candidates:
+            return []
+
+        idf = self._document_inverse_document_frequency()
+        query_terms = _content_terms(query)
+        # The weight the query could carry, over the terms the corpus
+        # knows. A term that is in every document, or in none of them,
+        # carries no information and so does not count towards it.
+        total_weight = sum(idf.get(term, 0.0) for term in query_terms)
+
+        for candidate in candidates:
+            candidate.score = _relevance(candidate, query_terms, idf, total_weight)
+
+        if document_ids and len(document_ids) > 1:
+            selected = _fair_share(candidates, top_k)
+        else:
+            selected = candidates[:top_k]
+
+        selected.sort(key=lambda item: (-item.score, item.chunk.chunk_id))
+        for rank, candidate in enumerate(selected, start=1):
+            candidate.rank = rank
+        return selected
 
     # ------------------------------------------------------------------
     # Grounded question answering
@@ -576,6 +625,43 @@ class DocumentIntelligenceService:
             )
         return evidence
 
+    def _document_inverse_document_frequency(self) -> dict[str, float]:
+        """Return the inverse document frequency of each term, over documents.
+
+        The measure is over documents rather than over chunks, because the
+        question being asked is which document a passage belongs to. A
+        term that appears in every document carries little information
+        about which document is meant, so it is given a small weight; a
+        term that appears in one document carries the most.
+
+        This is what keeps a query that names one document from being
+        answered with passages from another: the words that are common to
+        the whole corpus, such as "document" or "sample", stop dominating.
+        """
+        documents: dict[str, set[str]] = {}
+        for chunk in self.store.all_chunks():
+            terms = set(_content_terms(chunk.text))
+            if chunk.heading:
+                terms |= _content_terms(chunk.heading)
+            documents.setdefault(chunk.document_id, set()).update(terms)
+
+        total = len(documents)
+        if total == 0:
+            return {}
+
+        frequency: dict[str, int] = {}
+        for terms in documents.values():
+            for term in terms:
+                frequency[term] = frequency.get(term, 0) + 1
+
+        # The weight falls as a term appears in more documents, but it
+        # never reaches zero: with a small corpus every term is in every
+        # document, and a term that is nowhere still says something.
+        return {
+            term: math.log(1.0 + total / count)
+            for term, count in frequency.items()
+        }
+
     def _inverse_document_frequency(self) -> dict[str, float]:
         """Return the inverse document frequency of each indexed term.
 
@@ -659,7 +745,17 @@ class DocumentIntelligenceService:
         else:
             document_ids = None
 
-        if question:
+        if scope:
+            # A summary covers the document, not only the passages that
+            # happen to match the request's wording. The question focuses
+            # the summary, but it does not decide which parts of the
+            # document are summarised, so the whole document is available
+            # as evidence.
+            retrieved = self._representative_chunks(
+                document_ids=document_ids,
+                top_k=SUMMARY_COVERAGE_LIMIT,
+            )
+        elif question:
             retrieved = self.retrieve(
                 question,
                 top_k=top_k,
@@ -932,6 +1028,28 @@ class DocumentIntelligenceService:
     # ------------------------------------------------------------------
     # Inspection helpers
     # ------------------------------------------------------------------
+    def document_id_for_path(self, path: str | Path) -> str | None:
+        """Return the id of the indexed document that came from *path*.
+
+        A request that names a file is about that file, so the file's
+        document is the scope. The path is resolved under the path policy
+        first, so the same rules apply as for reading it.
+        """
+        try:
+            resolved = self._resolve_readable_path(path)
+        except PathPolicyError:
+            return None
+
+        for document in self.documents():
+            if document.source_path is None:
+                continue
+            try:
+                if Path(document.source_path).resolve() == resolved.resolve():
+                    return document.document_id
+            except OSError:  # pragma: no cover - defensive
+                continue
+        return None
+
     def documents(self) -> list[Document]:
         """Return the documents known to the store."""
         return [
@@ -1005,6 +1123,72 @@ def _content_terms(text: str) -> set[str]:
         for token in tokens
         if token not in _STOP_WORDS and len(token) > 2
     }
+
+
+def _relevance(
+    result: RetrievedChunk,
+    query_terms: set[str],
+    idf: dict[str, float],
+    total_weight: float,
+) -> float:
+    """Return how relevant a retrieved passage is to the query.
+
+    The passage's own text and its heading are both searched: a passage
+    under a heading such as "2. Warranty" is about warranties even when
+    the sentence does not repeat the word.
+
+    The result is the share of the query's information that the passage
+    carries, so it is the fraction of the query's weight that the
+    passage matches. A passage that matches every distinctive term of the
+    query scores one; a passage that matches none of them scores zero.
+    """
+    if not query_terms or total_weight <= 0:
+        return 0.0
+
+    terms = _content_terms(result.chunk.text)
+    if result.chunk.heading:
+        terms |= _content_terms(result.chunk.heading)
+
+    weight = sum(
+        idf.get(term, 0.0) for term in _matched_terms(terms, query_terms)
+    )
+    if weight <= 0:
+        return 0.0
+    return min(weight / total_weight, 1.0)
+
+
+def _fair_share(
+    candidates: list[RetrievedChunk],
+    top_k: int,
+) -> list[RetrievedChunk]:
+    """Choose *top_k* results so that every document in scope is represented.
+
+    The candidates are taken in turn from each document, best first, so a
+    document cannot take every slot on the strength of a common word.
+    The chosen set is then ordered by relevance, so the result is still
+    ranked.
+    """
+    by_document: dict[str, list[RetrievedChunk]] = {}
+    for candidate in candidates:
+        by_document.setdefault(candidate.chunk.document_id, []).append(candidate)
+
+    for group in by_document.values():
+        group.sort(key=lambda item: (-item.score, item.chunk.chunk_id))
+
+    chosen: list[RetrievedChunk] = []
+    depth = 0
+    while len(chosen) < top_k:
+        added = False
+        for group in by_document.values():
+            if depth < len(group):
+                chosen.append(group[depth])
+                added = True
+                if len(chosen) >= top_k:
+                    break
+        if not added:
+            break
+        depth += 1
+    return chosen
 
 
 #: Suffixes stripped when stemming a word.

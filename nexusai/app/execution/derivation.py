@@ -113,6 +113,21 @@ def derive_tool_inputs(
     if capability == "llm.summarise" and not resolved.get("question") and request.strip():
         resolved["question"] = request.strip()
 
+    if capability in ("document.extract", "llm.summarise"):
+        # A request that names a file is about that file. The reference is
+        # carried into the capability, which resolves it to the document
+        # it came from and restricts its retrieval to it. Without this, a
+        # request naming one document can be answered with passages from
+        # another, because the words in the request often match the
+        # boilerplate that every document shares.
+        reference = find_document_reference(request)
+        if (
+            reference
+            and not resolved.get("document_ids")
+            and not resolved.get("document_id")
+        ):
+            resolved["document_path"] = reference
+
     if capability == "reminder.create" and request.strip():
         # The request carries both what the reminder is about and when it
         # is due. The time is parsed by the capability, so the whole

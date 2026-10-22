@@ -114,12 +114,15 @@ reason: The retrieved passages did not contain a statement that
 | A valid document request was blocked | "Summarise the uploaded meeting notes" classified correctly at 0.240, below the 0.35 clarification threshold, so it was refused and the planner produced an empty plan | The Task Automation page now shows the ranked candidate intents with their scores and the user chooses one; the choice is planned with `source="explicit"`. The thresholds were not lowered, because the same model scores "Set an alarm for 7 AM" at 0.195 |
 | A stale plan was shown for the next request | The Plan section kept rendering the plan left in session state, so a request for the product manual displayed an `out_of_scope` plan belonging to an earlier request | A new classification now invalidates the plan, the execution and the override that preceded it |
 | The Data Intelligence page returned HTTP 400 | The page hand-built a plan document whose `created_at` and `updated_at` were null, which failed the plan schema's validation | The page now calls the registered `data.analyse` capability directly, through the registry and the same filesystem policy, and needs no plan |
+| Operating limits reported as action items | A table of parameters was read as a list of tasks, and the field names were read as owners: "Parameter (owner: Parameter)", "Supply voltage (owner: V)" | A table is an action table only when its header names an action column, or names both an owner and a due column. The owner and the due date are read from the columns that name them. Other tables are reported as key values, with each field kept with its own values |
+| Provenance truncated | The provenance paragraph is soft-wrapped across several lines and the text was read a line at a time, so it was cut short | The source is read in blocks: a line that continues the previous one is joined to it, so a field is never cut in half |
+| One document took every retrieval slot | The results were ranked on a word the documents share, so a cross-document request returned four passages from one document and one from the other | The results are ranked by a weighted term overlap over the passage's text and its heading, and each document in scope is given a share of the results |
 
 ## Regression Suite
 
 | Check | Result |
 |-------|--------|
-| `python -m pytest tests/` | **647 passed, 2 skipped** |
+| `python -m pytest tests/` | **665 passed, 2 skipped** |
 | `python -m ruff check .` | **All checks passed** |
 
 The two skips are the symlink-escape tests, which need a privilege

@@ -221,20 +221,17 @@ def test_without_a_selection_the_plan_asks_for_a_document(indexed: TestClient):
         assert result["status"] != "completed"
 
 
-def test_a_request_that_names_a_file_may_still_reach_the_whole_corpus(
-    indexed: TestClient,
-):
-    """Without a selection, retrieval is not restricted to one document.
+def test_an_unscoped_request_searches_the_whole_corpus(indexed: TestClient):
+    """Without a scope the corpus is searchable, and relevance decides.
 
-    The request names a file, so the reading task succeeds, but no
-    document id is set on the plan, so the extraction is free to draw on
-    the whole corpus. This is the behaviour the selection narrows, and
-    the point of the selection is that it removes that freedom.
+    The scope is what restricts a request to particular documents. Without
+    one, the whole corpus is searched, so a query whose terms appear in
+    more than one document reaches more than one document.
     """
     plan = indexed.post(
         "/api/v1/planner/plan",
         json={
-            "text": "Read data/sample/meeting_notes.md and summarise the decisions.",
+            "text": "Compare the warranty of the device with the meeting notes.",
             "intent": "document_summarisation",
             "source": "explicit",
         },
@@ -260,6 +257,36 @@ def test_a_request_that_names_a_file_may_still_reach_the_whole_corpus(
         "an unrestricted retrieval should be able to reach more than one document"
     )
 
+
+def test_relevance_keeps_a_query_to_the_document_it_names(indexed: TestClient):
+    """A query that names one document returns that document's passages.
+
+    This is the point of the re-ranking: the passages returned are the
+    ones the query is about, not the ones that happened to score highest
+    on a common word.
+    """
+    plan = indexed.post(
+        "/api/v1/planner/plan",
+        json={
+            "text": "Read data/sample/meeting_notes.md and summarise the decisions.",
+            "intent": "document_summarisation",
+            "source": "explicit",
+        },
+    ).json()["plan"]
+
+    report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
+    extract = next(
+        (result for result in report["task_results"] if result["capability"] == "document.extract"),
+        None,
+    )
+    if extract is None or extract["status"] != "completed":
+        return
+
+    document_ids = {
+        passage["document_id"] for passage in extract["output"].get("passages") or []
+    }
+    meeting_notes = _document_id(indexed, "meeting_notes.md")
+    assert document_ids <= {meeting_notes}
 
 def test_the_selected_document_reaches_the_execution_inputs(indexed: TestClient):
     """The executor passes the selection to the capability, not just the plan."""

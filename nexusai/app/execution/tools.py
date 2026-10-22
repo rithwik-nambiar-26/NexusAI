@@ -75,6 +75,13 @@ class DocumentExtractInput(BaseModel):
             "as document_id."
         ),
     )
+    document_path: str | None = Field(
+        default=None,
+        description=(
+            "Restrict retrieval to the document this file was indexed from. "
+            "Used when the request names the file."
+        ),
+    )
     top_k: int = Field(default=5, ge=1, le=50, description="Maximum number of passages")
 
 
@@ -91,6 +98,13 @@ class LlmSummariseInput(BaseModel):
         description=(
             "Documents to summarise. Each is summarised under its own "
             "heading; the documents are never blended into one narrative."
+        ),
+    )
+    document_path: str | None = Field(
+        default=None,
+        description=(
+            "Restrict the summary to the document this file was indexed "
+            "from. Used when the request names the file."
         ),
     )
     question: str | None = Field(
@@ -212,6 +226,7 @@ def _make_extract_handler(capabilities: DocumentCapabilities):
             query=payload.query,
             document_id=payload.document_id,
             document_ids=payload.document_ids,
+            document_path=payload.document_path,
             top_k=payload.top_k,
         )
         return DocumentExtractOutput.model_validate(result)
@@ -226,6 +241,7 @@ def _make_summarise_handler(capabilities: DocumentCapabilities):
         result = capabilities.llm_summarise(
             document_id=payload.document_id,
             document_ids=payload.document_ids,
+            document_path=payload.document_path,
             question=payload.question,
             top_k=payload.top_k,
         )

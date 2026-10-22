@@ -98,7 +98,6 @@ def render() -> None:
         )
         if choice != "(none)":
             selected_documents = [choice.split("—")[-1].strip()]
-            st.caption(f"The plan will read document `{selected_documents[0]}`.")
 
         # Cross-document analysis is possible, but only when the user asks
         # for it. It is never the default.
@@ -111,7 +110,9 @@ def render() -> None:
                 "never blended into one summary."
             ),
         )
-        if across_all and selected_documents:
+        if across_all:
+            # Every indexed document is in scope, whether or not one was
+            # chosen in the list above.
             selected_documents = [
                 document.get("document_id")
                 for document in documents
@@ -121,6 +122,8 @@ def render() -> None:
                 f"The plan will read {len(selected_documents)} documents, each "
                 "summarised separately."
             )
+        elif selected_documents:
+            st.caption(f"The plan will read document `{selected_documents[0]}`.")
     else:
         st.caption(
             "No documents are indexed yet. Use the Document Intelligence page "

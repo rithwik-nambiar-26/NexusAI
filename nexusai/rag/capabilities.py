@@ -107,6 +107,7 @@ class DocumentCapabilities:
         *,
         document_id: str | None = None,
         document_ids: list[str] | None = None,
+        document_path: str | None = None,
         top_k: int = 5,
         **_: Any,
     ) -> dict[str, Any]:
@@ -123,12 +124,15 @@ class DocumentCapabilities:
         if not query:
             raise CapabilityError("document.extract requires a query")
 
-        scope = self._scope(document_id, document_ids)
+        scope = self._scope(document_id, document_ids, document_path)
         results = self._service.retrieve(
             query,
             top_k=top_k,
             document_ids=set(scope) if scope else None,
         )
+        # A passage that shares nothing with the query is not evidence for
+        # it, however similar it looked to the vector search.
+        results = [result for result in results if result.score > 0]
 
         return {
             "query": query,
@@ -154,6 +158,7 @@ class DocumentCapabilities:
         document_id: str | None = None,
         *,
         document_ids: list[str] | None = None,
+        document_path: str | None = None,
         question: str | None = None,
         top_k: int = 5,
         **_: Any,
@@ -163,7 +168,7 @@ class DocumentCapabilities:
         The summary covers only the documents in scope, and never blends
         two documents into one narrative.
         """
-        scope = self._scope(document_id, document_ids)
+        scope = self._scope(document_id, document_ids, document_path)
         summary: Summary = self._service.summarize(
             document_id=document_id,
             document_ids=list(scope) if scope else None,
@@ -190,17 +195,31 @@ class DocumentCapabilities:
             ],
         }
 
-    @staticmethod
     def _scope(
+        self,
         document_id: str | None,
         document_ids: list[str] | None,
+        document_path: str | None = None,
     ) -> list[str]:
-        """Return the documents in scope, without duplicates."""
+        """Return the documents in scope, without duplicates.
+
+        A path is resolved to the document it was indexed from, so a
+        request that names a file is about that document. An explicit
+        document id takes precedence: it is the more specific
+        instruction.
+        """
         scope: list[str] = []
         for candidate in list(document_ids or []) + ([document_id] if document_id else []):
             if candidate and candidate not in scope:
                 scope.append(candidate)
-        return scope
+        if scope:
+            return scope
+
+        if document_path:
+            resolved = self._service.document_id_for_path(document_path)
+            if resolved:
+                return [resolved]
+        return []
 
     # ------------------------------------------------------------------
     # Dispatch
