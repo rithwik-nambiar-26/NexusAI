@@ -46,8 +46,8 @@ def create_plan_endpoint(
 ) -> PlanResponse:
     """Create a structured execution plan for a natural-language request."""
     intent = payload.intent
-    intent_confidence = 0.0
-    intent_status = "confident"
+    intent_confidence = payload.intent_confidence or 0.0
+    intent_status = payload.intent_status or "confident"
     entities = payload.entities or {}
     source = payload.source
 
@@ -73,6 +73,11 @@ def create_plan_endpoint(
         intent_status = classification.status.value
         entities = {**classification.entities, **(payload.entities or {})}
         source = "classifier"
+    elif source == "explicit":
+        # The caller asserted the intent, so the classification status does
+        # not apply. An explicit override is treated as a confident
+        # statement of intent.
+        intent_status = "confident"
 
     plan, _warnings = create_plan(
         request=payload.text,

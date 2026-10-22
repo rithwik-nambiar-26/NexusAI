@@ -1,14 +1,20 @@
 """Document intelligence API routes.
 
 These endpoints expose ingestion, retrieval, grounded question answering
-and grounded summarisation. They read and index documents; they never
-execute anything a document contains, and they never authorise an
-operation.
+and grounded summarisation, plus a direct CSV analysis endpoint.
+
+The CSV analysis endpoint invokes the registered ``data.analyse``
+capability directly rather than through a task plan. That keeps the
+analysis an independent, explicitly user-triggered workflow: it needs no
+plan, cannot be affected by a stale plan from another page, and still
+goes through the tool registry, the input and output schemas, and the
+filesystem policy.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 
 from nexusai.app.api.dependencies import get_app_settings
 from nexusai.app.api.schemas.rag import (
@@ -26,25 +32,53 @@ from nexusai.app.api.schemas.rag import (
 )
 from nexusai.app.config import Settings
 from nexusai.app.core.context import get_request_id
-from nexusai.rag.capabilities import get_capabilities
-from nexusai.rag.service import DocumentIntelligenceService, get_document_service
+from nexusai.app.core.exceptions import ServiceUnavailableError, ValidationError
+from nexusai.app.execution.csv_tool import CSV_CAPABILITIES
+from nexusai.app.execution.registry import ToolError, ToolErrorCategory, ToolRisk
+from nexusai.rag.capabilities import DocumentCapabilities
+from nexusai.rag.service import DocumentIntelligenceService
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 
-def _service_for(request: Request) -> DocumentIntelligenceService:
-    """Return the document service owned by the running application.
+class CsvAnalyseRequest(BaseModel):
+    """Request to analyse a CSV file."""
 
-    Each application instance owns its own vector index, so a test
-    application never reads or writes the developer's working index.
-    """
+    path: str = Field(..., min_length=1, description="Path to the CSV file")
+    group_by: str | None = Field(
+        default=None, description="Column to group the numeric aggregation by"
+    )
+    measure: str | None = Field(
+        default=None, description="Numeric column to aggregate"
+    )
+    top_n: int = Field(default=10, ge=1, le=100, description="Rows to report per group")
+
+
+class CsvAnalyseResponse(BaseModel):
+    """Response for a CSV analysis request."""
+
+    output: dict = Field(..., description="The analysis result")
+    request_id: str = Field(..., description="Correlation ID for this request")
+
+
+def _service_for(request: Request) -> DocumentIntelligenceService:
+    """Return the document service owned by the running application."""
     service = getattr(request.app.state, "document_service", None)
     if service is None:
-        # The application was built without a service (for example because
-        # the store directory was unwritable). Fall back to the shared
-        # instance rather than failing outright.
-        service = get_document_service()
+        raise ServiceUnavailableError(
+            "The document service is not available.", code="service_unavailable"
+        )
     return service
+
+
+def _registry_for(request: Request):
+    """Return the tool registry owned by the running application."""
+    registry = getattr(request.app.state, "tool_registry", None)
+    if registry is None:
+        raise ServiceUnavailableError(
+            "The tool registry is not available.", code="registry_unavailable"
+        )
+    return registry
 
 
 @router.post(
@@ -102,6 +136,68 @@ def list_documents(
     return DocumentListResponse(
         documents=service.documents(),
         chunk_count=service.chunk_count(),
+        request_id=get_request_id(),
+    )
+
+
+@router.post(
+    "/analyse-csv",
+    response_model=CsvAnalyseResponse,
+    summary="Analyse a CSV file",
+    description=(
+        "Profile a CSV file and aggregate over a column you name. The "
+        "analysis runs through the registered 'data.analyse' capability, so "
+        "it uses the same input and output validation and the same "
+        "filesystem policy as every other capability. It needs no task plan."
+    ),
+)
+def analyse_csv_endpoint(
+    request: Request,
+    payload: CsvAnalyseRequest,
+    settings: Settings = Depends(get_app_settings),
+) -> CsvAnalyseResponse:
+    """Analyse a CSV file through the registered capability."""
+    registry = _registry_for(request)
+
+    capability = next(
+        (name for name in CSV_CAPABILITIES if registry.has(name)),
+        None,
+    )
+    if capability is None:
+        raise ServiceUnavailableError(
+            "The CSV analysis capability is not registered.", code="capability_missing"
+        )
+
+    tool = registry.get(capability)
+
+    # Only a read-only, non-approval-gated capability may be invoked
+    # directly. This endpoint must never be able to perform a state
+    # change, so the check is explicit rather than assumed.
+    if tool.risk != ToolRisk.SAFE or tool.requires_approval:
+        raise ValidationError(
+            "The CSV analysis capability is not eligible for direct invocation.",
+            code="capability_not_directly_invocable",
+        )
+
+    try:
+        output, _elapsed = registry.execute(
+            capability,
+            payload.model_dump(exclude_none=False),
+        )
+    except ToolError as error:
+        if error.category in (
+            ToolErrorCategory.INVALID_INPUT,
+            ToolErrorCategory.PATH_NOT_ALLOWED,
+        ):
+            raise ValidationError(
+                str(error),
+                code=error.category.value,
+                details=error.details,
+            ) from error
+        raise
+
+    return CsvAnalyseResponse(
+        output=output.model_dump(),
         request_id=get_request_id(),
     )
 
@@ -202,7 +298,8 @@ def list_capabilities(
     settings: Settings = Depends(get_app_settings),
 ) -> CapabilityListResponse:
     """List the capability names this module satisfies."""
-    capabilities = get_capabilities(_service_for(request))
+    service = _service_for(request)
+    capabilities = DocumentCapabilities(service)
     return CapabilityListResponse(
         capabilities=capabilities.capabilities(),
         request_id=get_request_id(),

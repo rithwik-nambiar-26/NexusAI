@@ -29,6 +29,8 @@ from nexusai.app.core.logging import get_logger
 from nexusai.app.execution.registry import (
     RetryPolicy,
     ToolDefinition,
+    ToolError,
+    ToolErrorCategory,
     ToolPermission,
     ToolRegistry,
     ToolRisk,
@@ -306,7 +308,12 @@ class CsvToolOutput(BaseModel):
 
 
 def _make_handler(policy: PathPolicy | None):
-    """Build the CSV analysis handler."""
+    """Build the CSV analysis handler.
+
+    Failures are raised as structured :class:`ToolError` values so the
+    caller receives a precise reason — a refused path, an unknown column
+    or an unparsable file — rather than a generic handler failure.
+    """
 
     def handler(payload: CsvToolInput) -> CsvToolOutput:
         try:
@@ -318,11 +325,31 @@ def _make_handler(policy: PathPolicy | None):
                 policy=policy,
             )
         except PathPolicyError as exc:
-            raise ValueError(str(exc)) from exc
+            raise ToolError(
+                str(exc),
+                ToolErrorCategory.PATH_NOT_ALLOWED,
+                {"path": payload.path, "code": exc.code},
+            ) from exc
         except pd.errors.EmptyDataError as exc:
-            raise ValueError("The file is empty and has no header row.") from exc
+            raise ToolError(
+                "The file is empty and has no header row.",
+                ToolErrorCategory.INVALID_INPUT,
+                {"path": payload.path},
+            ) from exc
         except pd.errors.ParserError as exc:
-            raise ValueError(f"The file could not be parsed as CSV: {exc}") from exc
+            raise ToolError(
+                f"The file could not be parsed as CSV: {exc}",
+                ToolErrorCategory.INVALID_INPUT,
+                {"path": payload.path},
+            ) from exc
+        except ValueError as exc:
+            # analyse_csv raises ValueError for an unknown column or a
+            # non-numeric measure.
+            raise ToolError(
+                str(exc),
+                ToolErrorCategory.INVALID_INPUT,
+                {"path": payload.path},
+            ) from exc
         return CsvToolOutput.model_validate(result.model_dump())
 
     return handler

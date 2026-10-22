@@ -41,6 +41,10 @@ def _body(at) -> str:
     parts += [e.value for e in at.error]
     parts += [c.value for c in at.caption]
     parts += [t.value for t in at.title]
+    # Metric values are visible text too.
+    for metric in at.metric:
+        parts.append(str(metric.value))
+        parts.append(str(metric.label))
     # Dataframe cells are visible text too.
     for frame in at.dataframe:
         value = frame.value
@@ -173,3 +177,125 @@ def test_run_history_page_is_honest_about_history(app_test, monkeypatch):
     # The page must not present rows the backend did not supply.
     for table in at.dataframe:
         assert len(table.value) == 0, "run history must not be pre-populated with fake rows"
+
+
+# ---------------------------------------------------------------------------
+# Day 5.5.1 regression: the Plan section must never show a stale plan
+# ---------------------------------------------------------------------------
+
+
+def test_new_classification_clears_a_stale_plan(app_test, monkeypatch):
+    """A new request must not display the previous request's plan.
+
+    The defect was that the Plan section kept rendering the plan left in
+    session state, so a request for the product manual displayed an
+    ``out_of_scope`` plan belonging to an earlier request.
+    """
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_question_answering",
+            "confidence": 0.22,
+            "status": "clarification_required",
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    # Simulate a previous interaction that left an out_of_scope plan.
+    at = app_test.run()
+    at.session_state["task_classification"] = {
+        "result": {
+            "predicted_intent": "out_of_scope",
+            "confidence": 0.4,
+            "status": "confident",
+        }
+    }
+    at.session_state["task_request_used"] = "an earlier request"
+    at.session_state["task_plan"] = {
+        "plan_id": "plan_stale",
+        "intent": "out_of_scope",
+        "plan_status": "invalid",
+        "tasks": [],
+        "dependencies": [],
+        "execution_order": [],
+        "parallel_levels": [],
+        "missing_information": [],
+        "unsupported_operations": [],
+        "clarification_required": False,
+        "clarification_question": None,
+        "validation_errors": [],
+        "requires_approval": False,
+        "approval_reasons": [],
+        "source": "classifier",
+    }
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value(
+        "Read the uploaded product manual and tell me the installation requirements."
+    ).run()
+
+    # Press "Classify and plan" for the new request.
+    classify_button = next(
+        b for b in at.button if b.label == "Classify and plan"
+    )
+    at = classify_button.click().run()
+
+    body = _body(at)
+    # The stale out_of_scope plan must not be on screen.
+    assert "out_of_scope" not in body
+    # The new classification is shown instead.
+    assert "document question answering" in body
+    # And the plan section asks for a plan rather than showing the old one.
+    assert "Generate a plan" in body
+
+
+def test_stale_execution_report_is_cleared_with_a_new_request(app_test, monkeypatch):
+    """A new request must not display the previous request's execution."""
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_question_answering",
+            "confidence": 0.22,
+            "status": "clarification_required",
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.session_state["task_classification"] = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.3,
+            "status": "confident",
+        }
+    }
+    at.session_state["task_request_used"] = "an earlier request"
+    at.session_state["task_execution"] = {
+        "status": "completed",
+        "task_results": [
+            {"task_id": "old", "capability": "document.read", "status": "completed"}
+        ],
+    }
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value(
+        "Read the uploaded product manual and tell me the installation requirements."
+    ).run()
+
+    classify_button = next(
+        b for b in at.button if b.label == "Classify and plan"
+    )
+    at = classify_button.click().run()
+
+    # The previous request's execution is gone: the "Execute plan" button
+    # is gone with it, because the execution section only renders when
+    # there is an execution to show.
+    assert "Execute plan" not in [b.label for b in at.button]
+    # The old execution output is not presented as this request's result.
+    assert "old" not in _body(at)

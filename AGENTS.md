@@ -1,7 +1,7 @@
 # NexusAI — Project Context
 
 **Project:** NexusAI — AI-Powered Personal Task Automation (MSc Data Science)  
-**Phase:** Phase 0 research foundation complete; Phase 1 implementation pending review
+**Phase:** Phase 1 in progress — Days 1–5 implemented and committed; Day 5.5 Streamlit review interface integrated
 
 ## Working directory
 
@@ -38,7 +38,32 @@
 - Research question: "Can an AI-driven workflow engine autonomously decompose, execute, verify and adapt multi-step everyday tasks using heterogeneous real-time information?"
 - Second Review: 23–25 October 2026 (six criteria, 40 marks total)
 - Python 3.11.2 available; git repo initialised at `D:\NexusAI`
-- No application code yet — **do not start feature development until the research foundation is reviewed**
+- Application code exists: Days 1–5 are implemented, tested and committed. Day 6 (verifier/replanner) and Day 7 (experiment harness) are **not** started.
+- The research foundation has been reviewed and the Phase 1 implementation has begun.
+
+## Implementation state
+
+| Area | State |
+|------|-------|
+| Engineering foundation, FastAPI, SQLite, Streamlit (Day 1) | Implemented, tested |
+| Intent classification, 12 classes (Days 2–2.2) | Implemented, tested |
+| Structured planner with dependency graph (Day 3) | Implemented, tested |
+| Document intelligence and local RAG (Day 4) | Implemented, tested |
+| Tool registry and controlled execution (Day 5) | Implemented, tested |
+| Streamlit review interface (Day 5.5) | Implemented, tested |
+| Independent verifier, adaptive replanner (Day 6) | **Not started** |
+| Experiment harness and A/B/C evaluation (Day 7) | **Not started** |
+
+Five capabilities are registered, all read-only: `document.read`, `document.extract`,
+`llm.summarise`, `data.load`, `data.analyse`.
+
+## Research integrity rules
+
+- H₁ is **to be investigated, not assumed**. No comparative claim about the hybrid
+  architecture has been measured.
+- The literature matrix entries are provisional and require external verification.
+- Report measured results with their support counts. Never report a number that was
+  not produced by a run that is recorded in the repository.
 
 ## Git
 

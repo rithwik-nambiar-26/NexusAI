@@ -86,12 +86,14 @@ experiments/*.sqlite3
 experiments/.ipynb_checkpoints/
 
 # ---------------------------------------------------------------------------
-# Data (sample data is versioned; raw and processed are local-only)
+# Data (sample data is versioned; raw, processed and uploads are local-only)
 # ---------------------------------------------------------------------------
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+# User-uploaded files are personal data and must never reach the public repo.
+data/uploads/
 
 # ---------------------------------------------------------------------------
 # Generated artifacts (model weights, vector indexes)

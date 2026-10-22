@@ -121,6 +121,15 @@ def render() -> None:
         st.session_state["task_classification"] = classification
         st.session_state["task_request_used"] = request_text
 
+        # A new request invalidates any plan, execution and override left
+        # over from a previous one. Without this, the Plan section below
+        # would keep showing a stale plan — for a different request, and
+        # possibly for an intent that is not this request's at all.
+        st.session_state.pop("task_plan", None)
+        st.session_state.pop("task_execution", None)
+        st.session_state.pop("task_run_id", None)
+        st.session_state.pop("task_override_applied", None)
+
         # A supplied intent replaces the classifier's prediction.
         if override:
             st.session_state["task_override_applied"] = override
@@ -164,7 +173,23 @@ def render() -> None:
     if st.button("Generate plan", key="task_generate_plan"):
         with st.spinner("Building the plan..."):
             try:
-                plan_response = api_client.create_plan(plan_request, intent=intent_to_use)
+                if override:
+                    # The user asserted the intent, so the classification
+                    # status does not apply to it.
+                    plan_response = api_client.create_plan(
+                        plan_request, intent=intent_to_use
+                    )
+                else:
+                    # The intent came from the classifier. Its status is
+                    # carried through so that an uncertain classification
+                    # produces a request for clarification rather than a
+                    # plan built on a guess.
+                    plan_response = api_client.create_plan(
+                        plan_request,
+                        intent=intent_to_use,
+                        intent_status=result.get("status"),
+                        intent_confidence=result.get("confidence"),
+                    )
             except api_client.ApiError as error:
                 show_api_error(error)
                 return

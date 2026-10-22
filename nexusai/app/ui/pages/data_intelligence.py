@@ -1,9 +1,10 @@
 """Data Intelligence page: profile a CSV file and aggregate over it.
 
-The analysis runs through the registered ``data.analyse`` capability, so
-it goes through the same registry, the same input and output validation
-and the same filesystem policy as every other capability. Nothing here
-computes an analytical result on its own.
+The analysis is an independent, explicitly user-triggered workflow. It
+calls the registered ``data.analyse`` capability directly, so it uses the
+same registry, the same input and output validation and the same
+filesystem policy as every other capability. It requires no task plan,
+and so cannot be affected by a plan left over from another page.
 """
 
 from __future__ import annotations
@@ -94,87 +95,20 @@ def render() -> None:
         else:
             with st.spinner("Analysing..."):
                 try:
-                    response = api_client.execute_plan(
-                        {
-                            "original_request": (
-                                f"Analyse {path} and report the contents."
-                            ),
-                            "intent": "data_analysis",
-                            "plan_status": "ready",
-                            "tasks": [
-                                {
-                                    "task_id": "csv_analysis",
-                                    "task_name": "Analyse the dataset",
-                                    "description": "Profile the dataset and aggregate.",
-                                    "task_type": "data_analyse",
-                                    "expected_output": "Dataset profile and totals.",
-                                    "dependencies": [],
-                                    "required_capabilities": ["data.analyse"],
-                                    "verification_criteria": None,
-                                    "status": "pending",
-                                    "assigned_tool": None,
-                                    "input_parameters": [
-                                        {
-                                            "name": "path",
-                                            "value": path,
-                                            "description": "Dataset path",
-                                            "required": True,
-                                        },
-                                        {
-                                            "name": "group_by",
-                                            "value": group_by.strip() or None,
-                                            "description": "Grouping column",
-                                            "required": False,
-                                        },
-                                        {
-                                            "name": "measure",
-                                            "value": measure.strip() or None,
-                                            "description": "Numeric measure",
-                                            "required": False,
-                                        },
-                                    ],
-                                    "result": None,
-                                    "error": None,
-                                }
-                            ],
-                            "dependencies": [],
-                            "execution_order": ["csv_analysis"],
-                            "parallel_levels": [["csv_analysis"]],
-                            "missing_information": [],
-                            "unsupported_operations": [],
-                            "clarification_required": False,
-                            "clarification_question": None,
-                            "validation_errors": [],
-                            "requires_approval": False,
-                            "approval_reasons": [],
-                            "created_at": None,
-                            "updated_at": None,
-                            "source": "explicit",
-                        }
+                    response = api_client.analyse_csv(
+                        path=path.strip(),
+                        group_by=group_by.strip() or None,
+                        measure=measure.strip() or None,
                     )
                 except api_client.ApiError as error:
                     show_api_error(error)
                     return
-            st.session_state["data_analysis_report"] = response.get("report")
+            st.session_state["data_analysis_output"] = response.get("output") or {}
 
-    report = st.session_state.get("data_analysis_report")
-    if not report:
+    output = st.session_state.get("data_analysis_output")
+    if not output:
         st.info("Analyse a dataset to see its profile and totals.")
         return
-
-    results = report.get("task_results") or []
-    if not results:
-        st.error("The analysis produced no result.")
-        return
-
-    result = results[0]
-    if result.get("status") != "completed":
-        st.error(
-            f"**{result.get('status')}** — {result.get('error') or 'The analysis did not run.'}"
-        )
-        return
-
-    output = result.get("output") or {}
 
     st.markdown("**Dataset**")
     columns = st.columns(3)

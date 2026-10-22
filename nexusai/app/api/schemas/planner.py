@@ -16,6 +16,20 @@ class PlanRequest(BaseModel):
     intent: str | None = Field(default=None, description="Optional explicit intent category")
     entities: dict[str, Any] | None = Field(default=None, description="Extracted entities from request")
     source: str = Field(default="classifier", description="Source of intent: 'classifier' or 'explicit'")
+    intent_status: str | None = Field(
+        default=None,
+        description=(
+            "Status of the intent classification, when the intent came from "
+            "the classifier. A status of 'clarification_required' makes the "
+            "planner ask for clarification rather than plan."
+        ),
+    )
+    intent_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence of the intent classification",
+    )
 
 
 class PlanResponse(BaseModel):

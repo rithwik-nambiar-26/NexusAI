@@ -135,13 +135,30 @@ def classify_intent(text: str, base_url: str | None = None) -> dict[str, Any]:
 def create_plan(
     text: str,
     intent: str | None = None,
+    intent_status: str | None = None,
+    intent_confidence: float | None = None,
     base_url: str | None = None,
 ) -> dict[str, Any]:
-    """Create a structured plan for a request."""
+    """Create a structured plan for a request.
+
+    Args:
+        text: The natural-language request.
+        intent: The intent to plan for. When given, classification is
+            skipped unless a status is supplied.
+        intent_status: The status of the classification the intent came
+            from. A status of ``clarification_required`` makes the
+            planner ask for clarification rather than plan.
+        intent_confidence: The confidence of that classification.
+        base_url: Override for the backend base URL.
+    """
     payload: dict[str, Any] = {"text": text}
     if intent:
         payload["intent"] = intent
         payload["source"] = "explicit"
+    if intent_status:
+        payload["intent_status"] = intent_status
+    if intent_confidence is not None:
+        payload["intent_confidence"] = intent_confidence
     return api_request(
         "POST", "/api/v1/planner/plan", json=payload, base_url=base_url
     )
@@ -224,6 +241,29 @@ def summarise_document(
         payload["question"] = question
     return api_request(
         "POST", "/api/v1/documents/summarise", json=payload, base_url=base_url
+    )
+
+
+def analyse_csv(
+    path: str,
+    group_by: str | None = None,
+    measure: str | None = None,
+    top_n: int = 10,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Analyse a CSV file through the registered data capability.
+
+    This is an independent, explicitly triggered analysis. It needs no
+    task plan, so it cannot be affected by a plan left over from another
+    page.
+    """
+    payload: dict[str, Any] = {"path": path, "top_n": top_n}
+    if group_by:
+        payload["group_by"] = group_by
+    if measure:
+        payload["measure"] = measure
+    return api_request(
+        "POST", "/api/v1/documents/analyse-csv", json=payload, base_url=base_url
     )
 
 
