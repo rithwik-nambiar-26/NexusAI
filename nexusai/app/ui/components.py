@@ -19,6 +19,20 @@ except ImportError:  # pragma: no cover
 
 from nexusai.app.ui.api_client import ApiError, backend_is_reachable
 from nexusai.app.ui.config import API_BASE_URL
+from nexusai.ml.schemas import IntentCategory
+
+#: Intents that are refusal paths: they never produce an executable plan.
+#: They are listed in the confirmation flow so the user can see that the
+#: classifier recognised them, and so choosing one is refused honestly
+#: rather than silently.
+REFUSAL_INTENTS: frozenset[str] = frozenset(
+    intent.value for intent in IntentCategory.special()
+)
+
+#: Intents that map to an executable workflow.
+SUPPORTED_INTENTS: frozenset[str] = frozenset(
+    intent.value for intent in IntentCategory.supported()
+)
 
 
 def require_backend() -> bool:
@@ -132,6 +146,62 @@ def show_intent(intent: str | None, confidence: float | None, status: str | None
         with columns[2]:
             st.markdown("**Status**")
             render_status_badge(status)
+
+
+def intent_candidates(
+    result: dict[str, Any], limit: int = 5
+) -> list[dict[str, Any]]:
+    """Return the ranked intent candidates from a classification result.
+
+    The classifier returns a score for every intent in the taxonomy, so the
+    candidates are simply the highest-scoring ones. Ranking by score rather
+    than by the confidence threshold is deliberate: the top-ranked intent is
+    frequently the correct one even when its probability is low, and the
+    user is in a better position to choose than a fixed cut-off is.
+
+    Args:
+        result: The classification result, as returned by the intent API.
+        limit: The maximum number of candidates to return.
+
+    Returns:
+        A list of candidate dictionaries, highest score first. Each carries
+        the intent, a readable label, the score, and whether the intent is
+        a refusal path.
+    """
+    scores = result.get("all_scores") or {}
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
+
+    candidates: list[dict[str, Any]] = []
+    for intent, score in ranked:
+        candidates.append(
+            {
+                "intent": intent,
+                "label": intent.replace("_", " "),
+                "score": float(score),
+                "is_refusal": intent in REFUSAL_INTENTS,
+                "is_supported": intent in SUPPORTED_INTENTS,
+            }
+        )
+    return candidates
+
+
+def show_intent_candidates(candidates: list[dict[str, Any]]) -> None:
+    """Show the ranked intent candidates and their scores."""
+    if not candidates:
+        st.info("The classifier did not return any candidate intents.")
+        return
+
+    rows = []
+    for candidate in candidates:
+        kind = "refusal path" if candidate["is_refusal"] else "executable"
+        rows.append(
+            {
+                "intent": candidate["label"],
+                "score": f"{candidate['score']:.3f}",
+                "kind": kind,
+            }
+        )
+    st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 def show_plan(plan: dict[str, Any]) -> None:

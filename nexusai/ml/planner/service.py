@@ -343,6 +343,8 @@ class PlannerService:
         intent_status: str = ClassificationStatus.CONFIDENT.value,
         entities: dict[str, Any] | None = None,
         source: str = "classifier",
+        classifier_intent: str | None = None,
+        classifier_status: str | None = None,
     ) -> tuple[Plan, list[str]]:
         """Create a structured plan and report any warnings.
 
@@ -354,6 +356,12 @@ class PlannerService:
             entities: Entities extracted from the request.
             source: ``"classifier"`` or ``"explicit"``; recorded on the plan
                 so downstream consumers can tell how the intent was obtained.
+            classifier_intent: The classifier's own top-ranked prediction for
+                the request, when it differs from the intent being planned.
+            classifier_status: The status of that prediction. It is recorded
+                separately from ``intent_status`` because an explicitly
+                chosen intent is always treated as confident, while the
+                classifier's original verdict is not.
 
         Returns:
             A tuple of the plan and a list of warnings.
@@ -372,6 +380,24 @@ class PlannerService:
         except ValueError:
             plan = self._create_error_plan(request, f"Unknown intent: {intent}")
             return plan, [f"Unknown intent: {intent}"]
+
+        # A confident destructive classification may not be redirected to
+        # another intent. See _destructive_redirect_guard.
+        redirect_warning = self._destructive_redirect_guard(
+            intent_enum, classifier_intent, classifier_status
+        )
+        if redirect_warning is not None:
+            plan = self._create_destructive_redirect_plan(
+                request, intent, source, classifier_intent
+            )
+            return plan, [redirect_warning]
+
+        # A weaker destructive signal is not strong enough to refuse the
+        # request, but it is recorded on the plan so the destructive part of
+        # the request is never silently dropped.
+        destructive_note = self._destructive_signal_note(
+            intent_enum, classifier_intent
+        )
 
         # A low-confidence classification is not treated as ground truth.
         if intent_status == ClassificationStatus.CLARIFICATION_REQUIRED.value:
@@ -396,6 +422,14 @@ class PlannerService:
             source=source,
         )
 
+        if destructive_note:
+            plan.unsupported_operations.append(destructive_note)
+            plan.requires_approval = True
+            plan.approval_reasons.append(
+                "The classifier identified a destructive pattern in the request, "
+                "so the plan is marked for approval before it is executed."
+            )
+
         errors = plan.validate()
         if errors:
             plan.plan_status = PlanStatus.INVALID
@@ -419,6 +453,121 @@ class PlannerService:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+    @staticmethod
+    def _destructive_top1(
+        intent_enum: IntentCategory,
+        classifier_intent: str | None,
+    ) -> bool:
+        """Return True when the classifier's top intent was destructive.
+
+        "Top intent" means the classifier's own highest-scoring prediction,
+        which is not necessarily the intent being planned.
+        """
+        if classifier_intent is None:
+            return False
+        if classifier_intent != IntentCategory.DESTRUCTIVE_OPERATION.value:
+            return False
+        return intent_enum != IntentCategory.DESTRUCTIVE_OPERATION
+
+    @classmethod
+    def _destructive_redirect_guard(
+        cls,
+        intent_enum: IntentCategory,
+        classifier_intent: str | None,
+        classifier_status: str | None,
+    ) -> str | None:
+        """Refuse to redirect a confident destructive classification.
+
+        A caller may assert an intent explicitly — the confirmation flow in
+        the UI does exactly that. That assertion must not be able to erase
+        the classifier's own verdict that the request is destructive, so a
+        confident destructive prediction blocks a redirect to any other
+        intent.
+
+        The guard is deliberately narrow, because the classifier is weak on
+        this class: its per-class F1 for ``destructive_operation`` is 0.00
+        on the held-out set, and it scores benign phrasings such as "how do
+        I delete my old backups safely" within the same range as genuine
+        destructive commands. A *confident* destructive prediction is a
+        usable signal; a low-confidence one is not, so it is recorded on the
+        plan instead of refusing it.
+
+        The guard does not fire when the caller selected the destructive
+        intent itself — that path is already refused by the special-intent
+        handling.
+
+        Returns:
+            A warning message when the redirect must be refused, otherwise
+            ``None``.
+        """
+        if not cls._destructive_top1(intent_enum, classifier_intent):
+            return None
+        if classifier_status != ClassificationStatus.CONFIDENT.value:
+            return None
+        return (
+            "The classifier identified this request as a destructive operation "
+            "with confidence, so it cannot be planned as a different intent."
+        )
+
+    @classmethod
+    def _destructive_signal_note(
+        cls,
+        intent_enum: IntentCategory,
+        classifier_intent: str | None,
+    ) -> str | None:
+        """Return the note recording a weaker destructive signal.
+
+        When the classifier's top intent was destructive but not
+        confidently so, the request is planned for the chosen intent and the
+        destructive signal is recorded. The note appears in the plan's
+        unsupported operations, so the destructive part of the request is
+        reported rather than silently dropped.
+        """
+        if not cls._destructive_top1(intent_enum, classifier_intent):
+            return None
+        return (
+            "The classifier identified a destructive pattern in this request. "
+            "No destructive action will be taken, and no destructive "
+            "capability is registered."
+        )
+
+    def _create_destructive_redirect_plan(
+        self,
+        request: str,
+        intent: str | None,
+        source: str,
+        classifier_intent: str | None,
+    ) -> Plan:
+        """Create the plan returned when a destructive redirect is refused.
+
+        The plan has no tasks. It exists to say clearly that the request was
+        recognised as destructive and that choosing a different intent does
+        not remove that recognition.
+        """
+        plan = Plan(
+            original_request=request,
+            intent=intent,
+            plan_status=PlanStatus.INVALID,
+            clarification_required=True,
+            clarification_question=(
+                "This request looks like a destructive operation, so NexusAI "
+                "will not plan it as a different kind of task. Rephrase it to "
+                "say what you want done with the files, and it will be "
+                "classified again."
+            ),
+            source=source,
+        )
+        plan.requires_approval = True
+        plan.approval_reasons.append(
+            "The classifier detected a destructive operation; planning it as "
+            "another intent requires a rephrased request."
+        )
+        plan.validation_errors = [
+            f"Intent '{classifier_intent}' was classified with confidence and "
+            "cannot be redirected to a different intent."
+        ]
+        return plan
+
     def _create_clarification_plan(
         self, request: str, intent: str | None, confidence: float
     ) -> Plan:
@@ -662,6 +811,8 @@ def create_plan(
     intent_status: str = ClassificationStatus.CONFIDENT.value,
     entities: dict[str, Any] | None = None,
     source: str = "classifier",
+    classifier_intent: str | None = None,
+    classifier_status: str | None = None,
 ) -> tuple[Plan, list[str]]:
     """Create a plan using the shared planner service.
 
@@ -675,4 +826,6 @@ def create_plan(
         intent_status=intent_status,
         entities=entities,
         source=source,
+        classifier_intent=classifier_intent,
+        classifier_status=classifier_status,
     )

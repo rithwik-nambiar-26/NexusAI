@@ -137,24 +137,32 @@ def create_plan(
     intent: str | None = None,
     intent_status: str | None = None,
     intent_confidence: float | None = None,
+    source: str | None = None,
     base_url: str | None = None,
 ) -> dict[str, Any]:
     """Create a structured plan for a request.
 
     Args:
         text: The natural-language request.
-        intent: The intent to plan for. When given, classification is
-            skipped unless a status is supplied.
+        intent: The intent to plan for. When given, the planner uses it
+            instead of resolving one itself.
         intent_status: The status of the classification the intent came
             from. A status of ``clarification_required`` makes the
             planner ask for clarification rather than plan.
         intent_confidence: The confidence of that classification.
+        source: Where the intent came from — ``"classifier"`` when the
+            classifier's own prediction is being planned, or
+            ``"explicit"`` when the user chose it. Defaults to
+            ``"explicit"`` when an intent is supplied, and to
+            ``"classifier"`` otherwise.
         base_url: Override for the backend base URL.
     """
     payload: dict[str, Any] = {"text": text}
     if intent:
         payload["intent"] = intent
-        payload["source"] = "explicit"
+        payload["source"] = source or "explicit"
+    elif source:
+        payload["source"] = source
     if intent_status:
         payload["intent_status"] = intent_status
     if intent_confidence is not None:

@@ -20,11 +20,49 @@ from nexusai.app.api.schemas.planner import (
 from nexusai.app.config import Settings
 from nexusai.app.core.context import get_request_id
 from nexusai.app.core.exceptions import ServiceUnavailableError
+from nexusai.app.core.logging import get_logger
 from nexusai.app.services.intent import get_intent_service
 from nexusai.ml.planner.service import create_plan
 from nexusai.ml.schemas import IntentClassificationRequest
 
+logger = get_logger("api.planner")
+
 router = APIRouter(prefix="/api/v1/planner", tags=["planner"])
+
+
+def _classify_independently(text: str) -> tuple[str | None, str | None]:
+    """Classify *text* and return its top intent and status.
+
+    This is used when the caller supplies an intent of its own. The
+    classifier's own verdict is needed to enforce the destructive-operation
+    guard, and it must be obtained here rather than trusted from the
+    request body — otherwise a caller could claim an intent that the
+    classifier had already recognised as destructive.
+
+    A classifier that is unavailable is not an error here: the guard simply
+    cannot fire, and no destructive capability is registered, so nothing
+    destructive can run.
+
+    Returns:
+        A tuple of (intent, status), or (None, None) when the classifier
+        could not produce a prediction.
+    """
+    try:
+        service = get_intent_service()
+        if not service.is_available():
+            return None, None
+        result = service.classify(IntentClassificationRequest(text=text))
+    except Exception:  # pragma: no cover - defensive
+        logger.warning(
+            "Independent classification failed; the destructive-intent guard "
+            "could not be applied",
+            exc_info=True,
+        )
+        return None, None
+
+    if result.predicted_intent is None:
+        return None, None
+    return result.predicted_intent.value, result.status.value
 
 
 @router.post(
@@ -50,6 +88,8 @@ def create_plan_endpoint(
     intent_status = payload.intent_status or "confident"
     entities = payload.entities or {}
     source = payload.source
+    classifier_intent: str | None = None
+    classifier_status: str | None = None
 
     if intent is None:
         # Resolve the intent through the Day 2 classifier and forward its
@@ -73,11 +113,20 @@ def create_plan_endpoint(
         intent_status = classification.status.value
         entities = {**classification.entities, **(payload.entities or {})}
         source = "classifier"
-    elif source == "explicit":
-        # The caller asserted the intent, so the classification status does
-        # not apply. An explicit override is treated as a confident
-        # statement of intent.
-        intent_status = "confident"
+        classifier_intent = intent
+        classifier_status = intent_status
+    else:
+        # The caller supplied an intent. The classifier is run again here,
+        # independently of the caller, so the destructive-operation guard
+        # cannot be bypassed by asserting an intent the classifier had
+        # already recognised as destructive.
+        classifier_intent, classifier_status = _classify_independently(payload.text)
+
+        if source == "explicit":
+            # The caller asserted the intent, so the classification status
+            # does not apply to it. An explicit choice is treated as a
+            # confident statement of intent.
+            intent_status = "confident"
 
     plan, _warnings = create_plan(
         request=payload.text,
@@ -86,6 +135,8 @@ def create_plan_endpoint(
         intent_status=intent_status,
         entities=entities,
         source=source,
+        classifier_intent=classifier_intent,
+        classifier_status=classifier_status,
     )
 
     return PlanResponse(

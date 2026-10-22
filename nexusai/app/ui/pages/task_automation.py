@@ -14,10 +14,12 @@ except ImportError:  # pragma: no cover
 
 from nexusai.app.ui import api_client
 from nexusai.app.ui.components import (
+    intent_candidates,
     require_backend,
     show_api_error,
     show_execution_report,
     show_intent,
+    show_intent_candidates,
     show_plan,
 )
 
@@ -129,6 +131,8 @@ def render() -> None:
         st.session_state.pop("task_execution", None)
         st.session_state.pop("task_run_id", None)
         st.session_state.pop("task_override_applied", None)
+        st.session_state.pop("task_confirmed_intent", None)
+        st.session_state.pop("task_intent_choice", None)
 
         # A supplied intent replaces the classifier's prediction.
         if override:
@@ -143,12 +147,22 @@ def render() -> None:
     result = classification.get("result", {})
 
     override = st.session_state.get("task_override_applied")
+    confirmed = st.session_state.get("task_confirmed_intent")
+    status = result.get("status")
+
     if override:
         st.info(
             f"Using the explicit intent `{override}` instead of the classifier's "
             f"prediction."
         )
         show_intent(override, result.get("confidence"), "explicit")
+    elif confirmed:
+        st.success(
+            f"**Intent confirmed by you:** `{confirmed}`. The plan will be built "
+            "from this choice, and the plan records that it came from you "
+            "rather than from the classifier."
+        )
+        show_intent(confirmed, result.get("confidence"), "confirmed")
     else:
         show_intent(
             result.get("predicted_intent"),
@@ -162,34 +176,94 @@ def render() -> None:
         st.info(f"**Note** {result['abstention_reason']}")
 
     # ------------------------------------------------------------------
+    # Intent confirmation
+    # ------------------------------------------------------------------
+    # The classifier is experimental: on a 12-class taxonomy it is often
+    # unsure even when its top-ranked intent is the right one. Rather than
+    # block the request or plan it on a guess, the candidate intents are
+    # shown with their scores and the user chooses. The choice is then
+    # planned as an explicit intent, which the planner records.
+    section = 2
+    if not override and not confirmed and status != "confident":
+        section += 1
+        st.divider()
+        st.subheader(f"{section} · Confirm the intent")
+
+        candidates = intent_candidates(result)
+        st.caption(
+            "The classifier was not confident about this request. These are the "
+            "intents it ranked, with the score it gave each one. Choose the "
+            "one that matches what you asked for."
+        )
+        show_intent_candidates(candidates)
+
+        # The radio shows the score beside each candidate. The option text
+        # is the value, so the choice maps back to an intent through a
+        # lookup rather than through a formatting function.
+        options: list[str] = []
+        intent_by_option: dict[str, str] = {}
+        for candidate in candidates:
+            option = f"{candidate['label']} ({candidate['score']:.3f})"
+            if candidate["is_refusal"]:
+                option += " (refusal path)"
+            options.append(option)
+            intent_by_option[option] = candidate["intent"]
+
+        choice = st.radio(
+            "Which intent did you mean?",
+            options,
+            index=0,
+            key="task_intent_choice",
+        )
+
+        if st.button("Confirm this intent", key="task_confirm_intent"):
+            st.session_state["task_confirmed_intent"] = intent_by_option[choice]
+            # A new intent invalidates any plan built from the old one.
+            st.session_state.pop("task_plan", None)
+            st.session_state.pop("task_execution", None)
+            st.session_state.pop("task_run_id", None)
+            st.rerun()
+
+    # ------------------------------------------------------------------
     # Plan
     # ------------------------------------------------------------------
+    section += 1
     st.divider()
-    st.subheader("3 · Plan")
+    st.subheader(f"{section} · Plan")
 
     plan_request = st.session_state.get("task_request_used", request_text)
-    intent_to_use = override or result.get("predicted_intent")
+
+    if override or confirmed:
+        # The intent came from the user, either through the override box or
+        # through the confirmation flow, so it is planned as an explicit
+        # choice.
+        intent_to_use = override or confirmed
+        plan_source = "explicit"
+    else:
+        # The classifier's own prediction is planned, and its status is
+        # carried through so that an uncertain classification produces a
+        # request for clarification rather than a plan built on a guess.
+        intent_to_use = result.get("predicted_intent")
+        plan_source = "classifier"
 
     if st.button("Generate plan", key="task_generate_plan"):
         with st.spinner("Building the plan..."):
             try:
-                if override:
-                    # The user asserted the intent, so the classification
-                    # status does not apply to it.
-                    plan_response = api_client.create_plan(
-                        plan_request, intent=intent_to_use
-                    )
-                else:
-                    # The intent came from the classifier. Its status is
-                    # carried through so that an uncertain classification
-                    # produces a request for clarification rather than a
-                    # plan built on a guess.
-                    plan_response = api_client.create_plan(
-                        plan_request,
-                        intent=intent_to_use,
-                        intent_status=result.get("status"),
-                        intent_confidence=result.get("confidence"),
-                    )
+                plan_response = api_client.create_plan(
+                    plan_request,
+                    intent=intent_to_use,
+                    source=plan_source,
+                    intent_status=(
+                        None
+                        if plan_source == "explicit"
+                        else result.get("status")
+                    ),
+                    intent_confidence=(
+                        None
+                        if plan_source == "explicit"
+                        else result.get("confidence")
+                    ),
+                )
             except api_client.ApiError as error:
                 show_api_error(error)
                 return
@@ -222,8 +296,9 @@ def render() -> None:
     # ------------------------------------------------------------------
     # Execution
     # ------------------------------------------------------------------
+    section += 1
     st.divider()
-    st.subheader("4 · Execution")
+    st.subheader(f"{section} · Execution")
 
     if st.button("Execute plan", type="primary", key="task_execute"):
         with st.spinner("Executing the plan..."):

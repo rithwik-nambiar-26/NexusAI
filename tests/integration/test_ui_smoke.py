@@ -37,10 +37,16 @@ def _body(at) -> str:
     parts += [h.value for h in at.header]
     parts += [s.value for s in at.subheader]
     parts += [i.value for i in at.info]
+    parts += [s.value for s in at.success]
     parts += [w.value for w in at.warning]
     parts += [e.value for e in at.error]
     parts += [c.value for c in at.caption]
     parts += [t.value for t in at.title]
+    # Widget labels are visible text too.
+    parts += [b.label for b in at.button]
+    for radio in at.radio:
+        parts.append(str(radio.label))
+        parts += [str(option) for option in radio.options]
     # Metric values are visible text too.
     for metric in at.metric:
         parts.append(str(metric.value))
@@ -299,3 +305,165 @@ def test_stale_execution_report_is_cleared_with_a_new_request(app_test, monkeypa
     assert "Execute plan" not in [b.label for b in at.button]
     # The old execution output is not presented as this request's result.
     assert "old" not in _body(at)
+
+
+# ---------------------------------------------------------------------------
+# The intent-confirmation flow
+# ---------------------------------------------------------------------------
+
+
+UNCERTAIN_CLASSIFICATION = {
+    "result": {
+        "predicted_intent": "document_summarisation",
+        "confidence": 0.24,
+        "status": "clarification_required",
+        "clarification_question": "I'm not sure I understand.",
+        "all_scores": {
+            "document_summarisation": 0.24,
+            "document_transformation": 0.16,
+            "document_question_answering": 0.158,
+            "research": 0.14,
+            "destructive_operation": 0.038,
+        },
+    }
+}
+
+
+def _intent_radio(at):
+    """Return the intent-confirmation radio, or fail if it is not rendered."""
+    for radio in at.radio:
+        if radio.label == "Which intent did you mean?":
+            return radio
+    raise AssertionError(
+        "the intent confirmation radio was not rendered: "
+        f"{[r.label for r in at.radio]}"
+    )
+
+
+def test_uncertain_classification_offers_ranked_candidates(app_test, monkeypatch):
+    """A low-confidence classification must offer the ranked candidates."""
+    from nexusai.app.ui import api_client
+
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: UNCERTAIN_CLASSIFICATION
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value(
+        "Summarise the uploaded meeting notes and identify the important decisions."
+    ).run()
+
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    body = _body(at)
+    # The confirmation step is offered.
+    assert "Confirm the intent" in body
+    # The candidates are listed with their scores.
+    assert "document summarisation" in body
+    assert "0.240" in body
+    # The refusal paths are labelled as such.
+    assert "refusal path" in body
+    # And the user is asked to choose.
+    assert "Which intent did you mean?" in body
+
+    # The candidates are ranked, most likely first, and each carries its
+    # score.
+    radio = _intent_radio(at)
+    assert radio.options[0] == "document summarisation (0.240)"
+    assert radio.options[1] == "document transformation (0.160)"
+    assert radio.options[-1] == "destructive operation (0.038) (refusal path)"
+
+
+def test_confirming_an_intent_is_recorded_and_used(app_test, monkeypatch):
+    """A confirmed intent is stored and reported as the one being used."""
+    from nexusai.app.ui import api_client
+
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: UNCERTAIN_CLASSIFICATION
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value(
+        "Summarise the uploaded meeting notes and identify the important decisions."
+    ).run()
+
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    # Choose the summarisation intent explicitly.
+    _intent_radio(at).set_value("document summarisation (0.240)").run()
+    confirm_button = next(b for b in at.button if b.label == "Confirm this intent")
+    at = confirm_button.click().run()
+
+    assert at.session_state["task_confirmed_intent"] == "document_summarisation"
+    body = _body(at)
+    assert "Intent confirmed by you" in body
+    # The plan can now be generated.
+    assert "Generate plan" in body
+
+
+def test_a_confident_classification_does_not_offer_the_confirmation_step(
+    app_test, monkeypatch
+):
+    """A confident classification is planned directly."""
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.91,
+            "status": "confident",
+            "all_scores": {"document_summarisation": 0.91, "research": 0.04},
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise the meeting notes.").run()
+
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    body = _body(at)
+    assert "Confirm the intent" not in body
+    assert "Generate plan" in body
+
+
+def test_a_new_request_clears_a_previous_confirmation(app_test, monkeypatch):
+    """Confirming an intent must not carry over to the next request."""
+    from nexusai.app.ui import api_client
+
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: UNCERTAIN_CLASSIFICATION
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value(
+        "Summarise the uploaded meeting notes and identify the important decisions."
+    ).run()
+
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+    _intent_radio(at).set_value("document summarisation (0.240)").run()
+    confirm_button = next(b for b in at.button if b.label == "Confirm this intent")
+    at = confirm_button.click().run()
+    assert at.session_state["task_confirmed_intent"] == "document_summarisation"
+
+    # A new request clears the confirmation.
+    at.text_area[0].set_value("Read the product manual and list the requirements.").run()
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    assert "task_confirmed_intent" not in at.session_state
+    assert "Intent confirmed by you" not in _body(at)
