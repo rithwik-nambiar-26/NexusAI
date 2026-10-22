@@ -404,7 +404,7 @@ class PlannerService:
         source: str = "classifier",
         classifier_intent: str | None = None,
         classifier_status: str | None = None,
-        source_document: str | None = None,
+        source_documents: list[str] | None = None,
     ) -> tuple[Plan, list[str]]:
         """Create a structured plan and report any warnings.
 
@@ -422,10 +422,10 @@ class PlannerService:
                 separately from ``intent_status`` because an explicitly
                 chosen intent is always treated as confident, while the
                 classifier's original verdict is not.
-            source_document: The document the request is about, when the
-                user selected one. It is carried into the plan and given
-                to every document capability, so a request about one
-                document never reads another.
+            source_documents: The documents the request is about, when
+                the user selected one or more. They are carried into the
+                plan and given to every document capability, so a request
+                about one document never reads another.
 
         Returns:
             A tuple of the plan and a list of warnings.
@@ -484,7 +484,7 @@ class PlannerService:
             intent=intent_enum,
             entities=entities or {},
             source=source,
-            source_document=source_document,
+            source_documents=source_documents,
         )
 
         if destructive_note:
@@ -713,7 +713,7 @@ class PlannerService:
         intent: IntentCategory,
         entities: dict[str, Any],
         source: str,
-        source_document: str | None = None,
+        source_documents: list[str] | None = None,
     ) -> Plan:
         """Build a plan from the template registered for *intent*."""
         template = self._task_templates.get(intent.value, [])
@@ -726,7 +726,7 @@ class PlannerService:
             intent=intent.value,
             plan_status=PlanStatus.DRAFT,
             source=source,
-            source_document=source_document,
+            source_documents=list(source_documents or []),
         )
 
         for entry in template:
@@ -760,8 +760,8 @@ class PlannerService:
                 )
             )
 
-        if source_document:
-            self._apply_source_document(plan, source_document)
+        if source_documents:
+            self._apply_source_document(plan, list(source_documents))
 
         self._apply_safety_rules(plan)
         self._detect_missing_information(plan, request, intent)
@@ -793,28 +793,48 @@ class PlannerService:
             return [by_type[TaskType.REMINDER_LIST]]
         return [by_type[TaskType.REMINDER_CREATE]]
 
-    def _apply_source_document(self, plan: Plan, source_document: str) -> None:
-        """Give every document capability the document the user selected.
+    def _apply_source_document(self, plan: Plan, source_documents: list[str]) -> None:
+        """Give every document capability the documents in scope.
 
-        A request about one document must not read another. The selected
-        document is attached to each task that names a document
-        capability, so the executor passes it to the capability and the
-        capability restricts its retrieval to that document.
+        A request about one document must not read another. The documents
+        the user selected are attached to each task that names a document
+        capability, so the executor passes them to the capability and the
+        capability restricts its retrieval to them.
 
-        The ``document.read`` task also needs the path, because that is
-        how a document is located; the id is what the other capabilities
-        filter on.
+        The reading task is duplicated when several documents are in
+        scope, because each document has to be read; the retrieval and
+        summary tasks are given the whole scope, because they work across
+        it. A summary never blends two documents: the summariser keeps
+        them apart.
         """
+        scope = [doc for doc in source_documents if doc]
+        if not scope:
+            return
+
         for task in plan.tasks:
             capabilities = set(task.required_capabilities)
             if not capabilities & _DOCUMENT_CAPABILITIES:
                 continue
 
+            if "document.read" in capabilities:
+                # The reading task names one document. When several are in
+                # scope the first is read here and the rest are named in
+                # the scope, so the reading task is not duplicated.
+                task.input_parameters.append(
+                    TaskParameter(
+                        name="document_id",
+                        value=scope[0],
+                        description="The document the user selected for this request",
+                        required=False,
+                    )
+                )
+                continue
+
             task.input_parameters.append(
                 TaskParameter(
-                    name="document_id",
-                    value=source_document,
-                    description="The document the user selected for this request",
+                    name="document_ids",
+                    value=list(scope),
+                    description="The documents the request is about",
                     required=False,
                 )
             )
@@ -861,7 +881,7 @@ class PlannerService:
         if (
             intent in document_intents
             and not any(marker in lowered for marker in document_markers)
-            and not plan.source_document
+            and not plan.source_documents
         ):
             plan.missing_information.append(
                 "No source document was referenced; the plan needs a document path."
@@ -978,7 +998,7 @@ def create_plan(
     source: str = "classifier",
     classifier_intent: str | None = None,
     classifier_status: str | None = None,
-    source_document: str | None = None,
+    source_documents: list[str] | None = None,
 ) -> tuple[Plan, list[str]]:
     """Create a plan using the shared planner service.
 
@@ -994,5 +1014,5 @@ def create_plan(
         source=source,
         classifier_intent=classifier_intent,
         classifier_status=classifier_status,
-        source_document=source_document,
+        source_documents=source_documents,
     )

@@ -71,7 +71,9 @@ def render() -> None:
     # --- document selection ---------------------------------------------
     # A request that says "the uploaded document" does not name a file.
     # Rather than guess between several indexed documents, the user picks.
-    selected_document = None
+    # Selecting a document restricts the whole workflow to it: the reading,
+    # the extraction and the summary all act on that document alone.
+    selected_documents: list[str] = []
     try:
         listing = api_client.list_documents()
         documents = listing.get("documents") or []
@@ -90,12 +92,35 @@ def render() -> None:
             help=(
                 "Used when the request refers to a document without naming a "
                 "file. With several documents indexed, NexusAI asks rather "
-                "than guessing."
+                "than guessing. The selected document restricts the whole "
+                "workflow to it."
             ),
         )
         if choice != "(none)":
-            selected_document = choice.split("—")[-1].strip()
-            st.caption(f"The plan will read document `{selected_document}`.")
+            selected_documents = [choice.split("—")[-1].strip()]
+            st.caption(f"The plan will read document `{selected_documents[0]}`.")
+
+        # Cross-document analysis is possible, but only when the user asks
+        # for it. It is never the default.
+        across_all = st.checkbox(
+            "Search across all indexed documents",
+            key="task_across_all_documents",
+            help=(
+                "Use this only when the request genuinely spans several "
+                "documents. Each document is summarised separately; they are "
+                "never blended into one summary."
+            ),
+        )
+        if across_all and selected_documents:
+            selected_documents = [
+                document.get("document_id")
+                for document in documents
+                if document.get("document_id")
+            ]
+            st.caption(
+                f"The plan will read {len(selected_documents)} documents, each "
+                "summarised separately."
+            )
     else:
         st.caption(
             "No documents are indexed yet. Use the Document Intelligence page "
@@ -267,12 +292,12 @@ def render() -> None:
                         if plan_source == "explicit"
                         else result.get("confidence")
                     ),
-                    # The selected document is sent with the request, so
-                    # the planner puts it on every document task. It is
-                    # not patched onto the plan afterwards, which would
+                    # The selected documents are sent with the request, so
+                    # the planner puts them on every document task. They
+                    # are not patched onto the plan afterwards, which would
                     # leave the plan's own record of the source
                     # inconsistent with what actually runs.
-                    source_document=selected_document,
+                    source_documents=list(selected_documents) or None,
                 )
             except api_client.ApiError as error:
                 show_api_error(error)
@@ -280,6 +305,13 @@ def render() -> None:
         plan = plan_response.get("plan") or {}
 
         st.session_state["task_plan"] = plan
+        # The plan is bound to the request and the documents it was built
+        # from. A plan built for a different request, or for different
+        # documents, must not be executed against the current selection.
+        st.session_state["task_plan_context"] = {
+            "request": plan_request,
+            "documents": list(selected_documents),
+        }
         # A new plan invalidates any approval granted for the old one.
         st.session_state.pop("task_execution", None)
         st.session_state.pop("task_run_id", None)
@@ -299,7 +331,25 @@ def render() -> None:
     st.divider()
     st.subheader(f"{section} · Execution")
 
-    if st.button("Execute plan", type="primary", key="task_execute"):
+    # A plan is bound to the request and the documents it was built from.
+    # Executing a plan that was built for a different request, or for a
+    # different document, would act on something the user did not ask
+    # for, so it is refused rather than run.
+    context = st.session_state.get("task_plan_context") or {}
+    stale_reasons: list[str] = []
+    if context.get("request") not in (None, request_text):
+        stale_reasons.append("the request text has changed since the plan was made")
+    if list(context.get("documents") or []) != list(selected_documents):
+        stale_reasons.append("the selected document has changed since the plan was made")
+
+    if stale_reasons:
+        st.warning(
+            "**This plan is out of date** — "
+            + "; ".join(stale_reasons)
+            + ". Generate a new plan before executing it."
+        )
+        st.button("Generate plan", key="task_generate_plan_stale", disabled=True)
+    elif st.button("Execute plan", type="primary", key="task_execute"):
         with st.spinner("Executing the plan..."):
             try:
                 execution = api_client.execute_plan(

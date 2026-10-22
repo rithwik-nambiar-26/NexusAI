@@ -106,6 +106,7 @@ class DocumentCapabilities:
         query: str | None = None,
         *,
         document_id: str | None = None,
+        document_ids: list[str] | None = None,
         top_k: int = 5,
         **_: Any,
     ) -> dict[str, Any]:
@@ -113,15 +114,20 @@ class DocumentCapabilities:
 
         Returns the passages with their source references, so a downstream
         verification step can check each one against the original text.
+
+        The retrieval is restricted to the documents in scope. The scope is
+        either a list of document ids or a single one; when neither is
+        given, the whole corpus is searched, which is only correct when
+        the caller has asked for a cross-document question.
         """
         if not query:
             raise CapabilityError("document.extract requires a query")
 
-        document_ids = {document_id} if document_id else None
+        scope = self._scope(document_id, document_ids)
         results = self._service.retrieve(
             query,
             top_k=top_k,
-            document_ids=document_ids,
+            document_ids=set(scope) if scope else None,
         )
 
         return {
@@ -140,19 +146,27 @@ class DocumentCapabilities:
                 for result in results
             ],
             "count": len(results),
+            "documents": sorted({result.chunk.document_id for result in results}),
         }
 
     def llm_summarise(
         self,
         document_id: str | None = None,
         *,
+        document_ids: list[str] | None = None,
         question: str | None = None,
         top_k: int = 5,
         **_: Any,
     ) -> dict[str, Any]:
-        """Produce a grounded summary of a document or of relevant passages."""
+        """Produce a grounded summary of a document or of relevant passages.
+
+        The summary covers only the documents in scope, and never blends
+        two documents into one narrative.
+        """
+        scope = self._scope(document_id, document_ids)
         summary: Summary = self._service.summarize(
             document_id=document_id,
+            document_ids=list(scope) if scope else None,
             top_k=top_k,
             question=question,
         )
@@ -162,6 +176,7 @@ class DocumentCapabilities:
             "citations": summary.citations,
             "method": summary.method,
             "sections": summary.sections,
+            "documents": summary.documents,
             "evidence": [
                 {
                     "chunk_id": span.chunk_id,
@@ -174,6 +189,18 @@ class DocumentCapabilities:
                 for span in summary.evidence
             ],
         }
+
+    @staticmethod
+    def _scope(
+        document_id: str | None,
+        document_ids: list[str] | None,
+    ) -> list[str]:
+        """Return the documents in scope, without duplicates."""
+        scope: list[str] = []
+        for candidate in list(document_ids or []) + ([document_id] if document_id else []):
+            if candidate and candidate not in scope:
+                scope.append(candidate)
+        return scope
 
     # ------------------------------------------------------------------
     # Dispatch

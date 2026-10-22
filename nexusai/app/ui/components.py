@@ -214,15 +214,16 @@ def show_plan(plan: dict[str, Any]) -> None:
             "plan_status": plan.get("plan_status"),
             "requires_approval": plan.get("requires_approval"),
             "source": plan.get("source"),
-            "source_document": plan.get("source_document"),
+            "source_documents": plan.get("source_documents"),
         }
     )
 
-    # The document the plan is about is shown in full, because it decides
-    # which document the capabilities will read.
-    source_document = plan.get("source_document")
-    if source_document:
-        st.info(f"**Source document:** `{source_document}`")
+    # The documents the plan is about are shown in full, because they
+    # decide which documents the capabilities will read.
+    source_documents = plan.get("source_documents") or []
+    if source_documents:
+        listed = ", ".join(f"`{doc}`" for doc in source_documents)
+        st.info(f"**Source document{'s' if len(source_documents) > 1 else ''}:** {listed}")
 
     tasks = plan.get("tasks") or []
     if not tasks:

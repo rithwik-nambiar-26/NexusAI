@@ -67,6 +67,14 @@ class DocumentExtractInput(BaseModel):
     document_id: str | None = Field(
         default=None, description="Restrict retrieval to one document"
     )
+    document_ids: list[str] | None = Field(
+        default=None,
+        description=(
+            "Restrict retrieval to these documents. Used when the request "
+            "explicitly spans several documents; a single document is given "
+            "as document_id."
+        ),
+    )
     top_k: int = Field(default=5, ge=1, le=50, description="Maximum number of passages")
 
 
@@ -77,6 +85,13 @@ class LlmSummariseInput(BaseModel):
 
     document_id: str | None = Field(
         default=None, description="Document to summarise; all documents when omitted"
+    )
+    document_ids: list[str] | None = Field(
+        default=None,
+        description=(
+            "Documents to summarise. Each is summarised under its own "
+            "heading; the documents are never blended into one narrative."
+        ),
     )
     question: str | None = Field(
         default=None, description="Focus the summary on this question"
@@ -126,6 +141,10 @@ class DocumentExtractOutput(BaseModel):
     query: str
     passages: list[DocumentPassage] = Field(default_factory=list)
     count: int = 0
+    documents: list[str] = Field(
+        default_factory=list,
+        description="The documents the passages came from",
+    )
 
 
 class SummaryEvidence(BaseModel):
@@ -161,6 +180,10 @@ class LlmSummariseOutput(BaseModel):
         default_factory=list,
         description="The structured sections of the summary, when it is structured",
     )
+    documents: list[str] = Field(
+        default_factory=list,
+        description="The documents the summary covers",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +211,7 @@ def _make_extract_handler(capabilities: DocumentCapabilities):
         result = capabilities.document_extract(
             query=payload.query,
             document_id=payload.document_id,
+            document_ids=payload.document_ids,
             top_k=payload.top_k,
         )
         return DocumentExtractOutput.model_validate(result)
@@ -201,6 +225,7 @@ def _make_summarise_handler(capabilities: DocumentCapabilities):
     def handler(payload: LlmSummariseInput) -> LlmSummariseOutput:
         result = capabilities.llm_summarise(
             document_id=payload.document_id,
+            document_ids=payload.document_ids,
             question=payload.question,
             top_k=payload.top_k,
         )

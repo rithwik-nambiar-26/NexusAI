@@ -613,6 +613,7 @@ class DocumentIntelligenceService:
         document_id: str | None = None,
         top_k: int = DEFAULT_TOP_K,
         question: str | None = None,
+        document_ids: list[str] | None = None,
     ) -> Summary:
         """Summarise a document, or the passages most relevant to a question.
 
@@ -629,21 +630,32 @@ class DocumentIntelligenceService:
         the action items. Nothing is generated, so every statement can be
         checked against the source, and the method is ``"extractive"``.
 
+        **One document is summarised at a time.** When several documents
+        are in scope, each is summarised under its own heading and the
+        documents are never blended into a single narrative, because a
+        reader would then have no way to tell which document a statement
+        came from.
+
         A summary is never produced from no evidence: the result is an
         explicit insufficient-evidence response.
         """
-        if document_id is not None:
-            if not self.store.has_document(document_id):
+        scope = self._resolve_scope(document_id, document_ids)
+
+        if scope is not None:
+            missing = [doc for doc in scope if not self.store.has_document(doc)]
+            if missing and len(missing) == len(scope):
                 return Summary(
-                    source_document_id=document_id,
+                    source_document_id=scope[0] if len(scope) == 1 else None,
                     status=AnswerStatus.INSUFFICIENT_EVIDENCE,
                     method="none",
+                    documents=list(scope),
                     summary_text=(
                         "That document is not indexed, so there is nothing to "
                         "summarise."
                     ),
                 )
-            document_ids = {document_id}
+            scope = [doc for doc in scope if self.store.has_document(doc)]
+            document_ids = set(scope) if scope else None
         else:
             document_ids = None
 
@@ -662,6 +674,7 @@ class DocumentIntelligenceService:
                 source_document_id=document_id,
                 status=AnswerStatus.NO_DOCUMENTS,
                 method="none",
+                documents=list(scope) if scope else [],
                 summary_text=(
                     "No document was found that matches the request, so there "
                     "is nothing to summarise."
@@ -692,6 +705,7 @@ class DocumentIntelligenceService:
                 source_document_id=document_id,
                 status=AnswerStatus.INSUFFICIENT_EVIDENCE,
                 method="none",
+                documents=list(scope) if scope else [],
                 summary_text=(
                     "The retrieved passages did not contain anything that "
                     "could be summarised."
@@ -702,18 +716,22 @@ class DocumentIntelligenceService:
         # result records which method produced the summary.
         llm_summary = self._summarize_with_llm(evidence, question)
         if llm_summary is not None:
+            llm_summary.documents = list(scope) if scope else sorted(
+                {span.document_id for span in evidence}
+            )
             return llm_summary
 
         structured = build_structured_summary(
             evidence,
             question=question,
-            sections=self._sections_for(document_id),
+            groups=self._groups_for(scope, evidence),
         )
         if not structured.sufficient:
             return Summary(
                 source_document_id=document_id,
                 status=AnswerStatus.INSUFFICIENT_EVIDENCE,
                 method="extractive",
+                documents=list(scope) if scope else [],
                 summary_text=structured.reason
                 or "The evidence did not support a summary.",
                 evidence=evidence,
@@ -727,24 +745,54 @@ class DocumentIntelligenceService:
             citations=structured.citations,
             status=AnswerStatus.ANSWERED,
             method="extractive",
+            documents=structured.documents,
             sections=to_dict(structured)["sections"],
         )
 
-    def _sections_for(self, document_id: str | None) -> list[DocumentSection] | None:
-        """Return a document's own sections, when one document is in scope.
+    def _resolve_scope(
+        self,
+        document_id: str | None,
+        document_ids: list[str] | None,
+    ) -> list[str] | None:
+        """Return the documents in scope, or None when the scope is open.
+
+        A single document and a list of documents are both accepted. The
+        result preserves the order the documents were given in and drops
+        duplicates.
+        """
+        scope: list[str] = []
+        for candidate in list(document_ids or []) + ([document_id] if document_id else []):
+            if candidate and candidate not in scope:
+                scope.append(candidate)
+        return scope or None
+
+    def _groups_for(
+        self,
+        scope: list[str] | None,
+        evidence: list[EvidenceSpan],
+    ) -> list[tuple[str, str, list[DocumentSection]]]:
+        """Return the documents to summarise, each with its own sections.
 
         A document's sections are the natural unit for a structured
         summary: a heading such as "Action items" says what the text under
-        it is, which a chunk boundary does not. When several documents are
-        in scope there is no single structure to follow, so None is
-        returned and the summary is built from the retrieved passages.
+        it is, which a chunk boundary does not.
+
+        When the scope is open, the documents are taken from the evidence
+        that was retrieved, so the summary still separates one document
+        from another rather than blending them.
         """
-        if document_id is None:
-            return None
-        document = self._documents.get(document_id)
-        if document is None:
-            return None
-        return list(document.sections)
+        names = {span.document_id: span.document_name for span in evidence}
+        wanted = list(scope) if scope else sorted(names)
+
+        groups: list[tuple[str, str, list[DocumentSection]]] = []
+        for wanted_id in wanted:
+            document = self._documents.get(wanted_id)
+            if document is None:
+                continue
+            groups.append(
+                (wanted_id, document.name or names.get(wanted_id, ""), list(document.sections))
+            )
+        return groups
 
     def _summarize_with_llm(
         self,

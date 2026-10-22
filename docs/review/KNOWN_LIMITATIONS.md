@@ -379,12 +379,23 @@ When the user selects a document in the interface, the selection is sent
 with the plan request and the planner puts it on every task that names a
 document capability. The executor passes it to the capability, and the
 capability restricts its retrieval to that document. The plan records
-which document it is about, so the plan's own record agrees with what
+which documents it is about, so the plan's own record agrees with what
 ran.
+
+A request may explicitly span several documents, and then each is
+summarised under its own heading. The documents are never blended into
+one narrative, because a reader would have no way to tell which document
+a statement came from. The capabilities report the documents they
+actually read, so a mismatch is visible rather than silent.
+
+A plan is bound to the request and the documents it was built from.
+Changing either makes the plan stale, and a stale plan is not executed.
 
 **Consequence:** a request about one document cannot retrieve passages
 from another. A request that names no document has no such restriction,
-and the plan reports the missing document rather than choosing one.
+and the plan reports the missing document rather than choosing one. A
+document id that is not indexed fails with a clear reason and does not
+fall back to searching the whole corpus.
 
 ---
 

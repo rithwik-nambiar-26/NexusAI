@@ -138,7 +138,7 @@ def create_plan(
     intent_status: str | None = None,
     intent_confidence: float | None = None,
     source: str | None = None,
-    source_document: str | None = None,
+    source_documents: list[str] | None = None,
     base_url: str | None = None,
 ) -> dict[str, Any]:
     """Create a structured plan for a request.
@@ -156,9 +156,10 @@ def create_plan(
             ``"explicit"`` when the user chose it. Defaults to
             ``"explicit"`` when an intent is supplied, and to
             ``"classifier"`` otherwise.
-        source_document: The document the request is about, when the user
-            selected one. Every document capability in the plan is
-            restricted to it.
+        source_documents: The documents the request is about, when the
+            user selected one or more. Every document capability in the
+            plan is restricted to them. Several are given only when the
+            request explicitly spans them.
         base_url: Override for the backend base URL.
     """
     payload: dict[str, Any] = {"text": text}
@@ -171,8 +172,8 @@ def create_plan(
         payload["intent_status"] = intent_status
     if intent_confidence is not None:
         payload["intent_confidence"] = intent_confidence
-    if source_document:
-        payload["source_document"] = source_document
+    if source_documents:
+        payload["source_documents"] = list(source_documents)
     return api_request(
         "POST", "/api/v1/planner/plan", json=payload, base_url=base_url
     )

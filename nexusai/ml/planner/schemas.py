@@ -214,12 +214,13 @@ class Plan(BaseModel):
     source: str = Field(
         default="classifier", description="Source of intent: 'classifier' or 'explicit'"
     )
-    source_document: str | None = Field(
-        default=None,
+    source_documents: list[str] = Field(
+        default_factory=list,
         description=(
-            "The document the request is about, when the user selected one. "
-            "It is carried into the plan so every document capability acts "
-            "on that document rather than on the whole corpus."
+            "The documents the request is about, when the user selected "
+            "one or more. They are carried into the plan so every document "
+            "capability acts on those documents rather than on the whole "
+            "corpus."
         ),
     )
 

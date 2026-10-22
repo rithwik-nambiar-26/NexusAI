@@ -603,7 +603,7 @@ def test_the_plan_shows_the_selected_document(app_test, monkeypatch):
         "plan_status": "ready",
         "requires_approval": False,
         "source": "explicit",
-        "source_document": "doc_meeting",
+        "source_documents": ["doc_meeting"],
         "tasks": [],
         "dependencies": [],
         "execution_order": [],
@@ -630,3 +630,146 @@ def test_the_plan_shows_the_selected_document(app_test, monkeypatch):
     body = _body(at)
     assert "Source document" in body
     assert "doc_meeting" in body
+
+def test_a_stale_plan_cannot_be_executed_after_the_document_changes(
+    app_test, monkeypatch
+):
+    """Changing the document must not leave the old plan executable.
+
+    The defect was that a plan built for one document could still be
+    executed after the user selected a different one, so the workflow ran
+    against a document the user had not chosen.
+    """
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.9,
+            "status": "confident",
+            "all_scores": {"document_summarisation": 0.9},
+        }
+    }
+    documents = {
+        "documents": [
+            {"name": "meeting_notes.md", "document_id": "doc_meeting"},
+            {"name": "product_manual.md", "document_id": "doc_manual"},
+        ]
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: documents)
+
+    plan = {
+        "plan_id": "plan_1",
+        "intent": "document_summarisation",
+        "plan_status": "ready",
+        "requires_approval": False,
+        "source": "explicit",
+        "source_documents": ["doc_meeting"],
+        "tasks": [],
+        "dependencies": [],
+        "execution_order": [],
+        "parallel_levels": [],
+        "missing_information": [],
+        "unsupported_operations": [],
+        "validation_errors": [],
+        "clarification_required": False,
+        "clarification_question": None,
+    }
+    monkeypatch.setattr(api_client, "create_plan", lambda *a, **k: {"plan": plan})
+    executed = []
+    monkeypatch.setattr(
+        api_client,
+        "execute_plan",
+        lambda p, **k: executed.append(p) or {"report": {"status": "completed", "task_results": []}},
+    )
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise the meeting notes.").run()
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    # Choose the meeting notes and build a plan for it.
+    options = at.selectbox[0].options
+    at.selectbox[0].set_value(next(o for o in options if "meeting_notes" in o)).run()
+    at = next(b for b in at.button if b.label == "Generate plan").click().run()
+    assert at.session_state["task_plan_context"]["documents"] == ["doc_meeting"]
+
+    # Now change the selection. The plan is stale and must not run.
+    options = at.selectbox[0].options
+    at.selectbox[0].set_value(next(o for o in options if "product_manual" in o)).run()
+
+    body = _body(at)
+    assert "out of date" in body
+    assert "Execute plan" not in [b.label for b in at.button]
+    assert executed == []
+
+
+def test_a_stale_plan_cannot_be_executed_after_the_request_changes(
+    app_test, monkeypatch
+):
+    """Changing the request text must not leave the old plan executable."""
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.9,
+            "status": "confident",
+            "all_scores": {"document_summarisation": 0.9},
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(
+        api_client,
+        "list_documents",
+        lambda *a, **k: {
+            "documents": [{"name": "meeting_notes.md", "document_id": "doc_meeting"}]
+        },
+    )
+
+    plan = {
+        "plan_id": "plan_1",
+        "intent": "document_summarisation",
+        "plan_status": "ready",
+        "requires_approval": False,
+        "source": "explicit",
+        "source_documents": ["doc_meeting"],
+        "tasks": [],
+        "dependencies": [],
+        "execution_order": [],
+        "parallel_levels": [],
+        "missing_information": [],
+        "unsupported_operations": [],
+        "validation_errors": [],
+        "clarification_required": False,
+        "clarification_question": None,
+    }
+    monkeypatch.setattr(api_client, "create_plan", lambda *a, **k: {"plan": plan})
+    executed = []
+    monkeypatch.setattr(
+        api_client,
+        "execute_plan",
+        lambda p, **k: executed.append(p) or {"report": {"status": "completed", "task_results": []}},
+    )
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise the meeting notes.").run()
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+    options = at.selectbox[0].options
+    at.selectbox[0].set_value(next(o for o in options if "meeting_notes" in o)).run()
+    at = next(b for b in at.button if b.label == "Generate plan").click().run()
+
+    # Change the request text without re-classifying.
+    at.text_area[0].set_value("Something entirely different.").run()
+
+    body = _body(at)
+    assert "out of date" in body
+    assert executed == []

@@ -182,6 +182,13 @@ class Summary(BaseModel):
         default_factory=list,
         description="The structured sections of the summary, when it is structured",
     )
+    documents: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The documents the summary covers. A summary never blends two "
+            "documents, so this says exactly which were used."
+        ),
+    )
 
     def is_grounded(self) -> bool:
         """Return True when the summary is backed by evidence."""

@@ -59,6 +59,16 @@ MEETING_SECTIONS = [
 ]
 
 
+#: The document the fixture sections belong to.
+DOC_ID = "doc_1"
+DOC_NAME = "meeting_notes.md"
+
+
+def _groups(sections=None):
+    """Return the fixture document as a group."""
+    return [(DOC_ID, DOC_NAME, sections if sections is not None else MEETING_SECTIONS)]
+
+
 def _span(text: str, reference: str = "doc | §Section") -> EvidenceSpan:
     return EvidenceSpan(
         text=text,
@@ -73,7 +83,7 @@ def _span(text: str, reference: str = "doc | §Section") -> EvidenceSpan:
 def test_the_sections_are_separated():
     """The summary separates the overview, the decisions and the actions."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     names = [section.name for section in summary.sections]
@@ -84,7 +94,7 @@ def test_the_sections_are_separated():
 def test_the_overview_reports_what_the_document_is():
     """The overview carries the date, the location and the attendees."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     overview = summary.sections[0]
@@ -101,7 +111,7 @@ def test_the_overview_reports_what_the_document_is():
 def test_the_decisions_are_the_statements_that_record_one():
     """Only the sentence that records a decision is reported as one."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     decisions = summary.sections[1]
@@ -116,7 +126,7 @@ def test_the_decisions_are_the_statements_that_record_one():
 def test_the_action_items_carry_the_owner_and_the_due_date():
     """The owner and the due date are read from the table, not inferred."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     actions = summary.sections[2].items
@@ -136,7 +146,7 @@ def test_the_action_items_carry_the_owner_and_the_due_date():
 def test_a_row_number_is_not_reported_as_the_action():
     """A table whose first column is only a row number is read correctly."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     for item in summary.sections[2].items:
@@ -146,7 +156,7 @@ def test_a_row_number_is_not_reported_as_the_action():
 def test_nothing_is_invented():
     """Every owner and date in the summary is one the source states."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     owners = {item.owner for item in summary.sections[2].items}
@@ -159,7 +169,7 @@ def test_nothing_is_invented():
 def test_every_item_cites_its_source():
     """Each item points at where it came from."""
     summary = build_structured_summary(
-        [_span("some text")], sections=MEETING_SECTIONS
+        [_span("some text")], groups=_groups(MEETING_SECTIONS)
     )
 
     for section in summary.sections:
@@ -203,7 +213,7 @@ def test_a_sentence_is_not_broken_by_a_soft_wrapped_line():
         )
     ]
 
-    summary = build_structured_summary([_span("some text")], sections=sections)
+    summary = build_structured_summary([_span("some text")], groups=_groups(sections))
 
     decisions = summary.sections[1].items
     assert len(decisions) == 1

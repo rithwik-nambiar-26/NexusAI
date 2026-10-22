@@ -60,15 +60,15 @@ def _document_id(client: TestClient, name: str) -> str:
     return next(d["document_id"] for d in documents if d["name"] == name)
 
 
-def _plan(client: TestClient, source_document: str | None = None) -> dict:
+def _plan(client: TestClient, source_documents: list[str] | None = None) -> dict:
     """Create a summarisation plan for the meeting notes."""
     payload = {
         "text": REQUEST,
         "intent": "document_summarisation",
         "source": "explicit",
     }
-    if source_document is not None:
-        payload["source_document"] = source_document
+    if source_documents is not None:
+        payload["source_documents"] = list(source_documents)
     return client.post("/api/v1/planner/plan", json=payload).json()["plan"]
 
 
@@ -81,9 +81,9 @@ def test_the_plan_records_the_selected_document(indexed: TestClient):
     """The plan carries the document the user chose."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
 
-    assert plan["source_document"] == meeting_notes
+    assert plan["source_documents"] == [meeting_notes]
 
 
 def test_the_plan_does_not_report_a_missing_document_when_one_was_selected(
@@ -97,7 +97,7 @@ def test_the_plan_does_not_report_a_missing_document_when_one_was_selected(
     """
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
 
     assert plan["missing_information"] == []
     joined = " ".join(plan["missing_information"]).lower()
@@ -110,7 +110,7 @@ def test_the_plan_still_reports_a_missing_document_when_none_was_selected(
     """Without a selection the plan still says what it needs."""
     plan = _plan(indexed, None)
 
-    assert plan["source_document"] is None
+    assert plan["source_documents"] == []
     joined = " ".join(plan["missing_information"]).lower()
     assert "no source document" in joined
 
@@ -123,7 +123,7 @@ def test_every_document_task_carries_the_selected_document(indexed: TestClient):
     """
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
 
     document_tasks = [
         task
@@ -138,9 +138,17 @@ def test_every_document_task_carries_the_selected_document(indexed: TestClient):
             parameter["name"]: parameter["value"]
             for parameter in task.get("input_parameters") or []
         }
-        assert parameters.get("document_id") == meeting_notes, (
-            f"task '{task['task_type']}' did not receive the selected document"
-        )
+        # The reading task names the document; the retrieval and summary
+        # tasks are given the whole scope.
+        scope = parameters.get("document_ids") or []
+        if "document.read" in task["required_capabilities"]:
+            assert parameters.get("document_id") == meeting_notes, (
+                f"task '{task['task_type']}' did not receive the selected document"
+            )
+        else:
+            assert scope == [meeting_notes], (
+                f"task '{task['task_type']}' did not receive the selected document"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +160,7 @@ def test_extraction_returns_only_the_selected_document(indexed: TestClient):
     """Selecting meeting_notes.md must not return product_manual.md chunks."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     extract = next(
@@ -175,7 +183,7 @@ def test_the_summary_contains_no_unrelated_document_content(indexed: TestClient)
     """The summary must not quote the document the user did not select."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -232,7 +240,7 @@ def test_a_request_that_names_a_file_may_still_reach_the_whole_corpus(
         },
     ).json()["plan"]
 
-    assert plan["source_document"] is None
+    assert plan["source_documents"] == []
 
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
     extract = next(
@@ -257,7 +265,7 @@ def test_the_selected_document_reaches_the_execution_inputs(indexed: TestClient)
     """The executor passes the selection to the capability, not just the plan."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     read = next(
@@ -277,7 +285,7 @@ def test_the_summary_is_structured(indexed: TestClient):
     """The summary separates the overview, the decisions and the actions."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -316,7 +324,7 @@ def test_the_summary_does_not_invent_owners_or_dates(indexed: TestClient):
     """
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -352,7 +360,7 @@ def test_the_summary_states_how_it_was_made(indexed: TestClient):
     """
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -365,7 +373,7 @@ def test_the_summary_keeps_its_source_references(indexed: TestClient):
     """Every item in the summary points at where it came from."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -383,7 +391,7 @@ def test_the_summary_is_not_a_concatenation_of_passages(indexed: TestClient):
     """The summary is organised, not the retrieved text joined together."""
     meeting_notes = _document_id(indexed, "meeting_notes.md")
 
-    plan = _plan(indexed, meeting_notes)
+    plan = _plan(indexed, [meeting_notes])
     report = indexed.post("/api/v1/execution/execute", json={"plan": plan}).json()["report"]
 
     summarise = next(
@@ -392,10 +400,13 @@ def test_the_summary_is_not_a_concatenation_of_passages(indexed: TestClient):
     output = summarise["output"]
     text = output["summary_text"]
 
-    # The section headings are present, so the summary is organised.
-    assert "Overview:" in text
-    assert "Decisions:" in text
-    assert "Action items:" in text
+    # The section headings are present, so the summary is organised. Each
+    # names the document it comes from, so a reader can tell which
+    # document a statement belongs to.
+    assert "Overview" in text
+    assert "Decisions" in text
+    assert "Action items" in text
+    assert "meeting_notes.md" in text
 
     # It is not a raw dump of the passages: the action-item table is
     # reported row by row rather than as one Markdown table.

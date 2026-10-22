@@ -222,7 +222,7 @@ NexusAI/
 │   │   ├── summarisation.py    # Structured extractive summary
 │   │   └── capabilities.py     # Planner capability adapter
 │   └── tools/                  # Placeholder (Day 5)
-├── tests/                      # 632 tests (unit/integration/e2e)
+├── tests/                      # 647 tests (unit/integration/e2e)
 ├── experiments/
 │   ├── scenarios/              # 18 evaluation scenarios (versioned)
 │   ├── datasets/               # Dataset documentation
@@ -298,14 +298,14 @@ See `docs/project_management/seven_day_implementation_plan.md` for full details.
 - ✅ Request ID middleware (propagation + context variable)
 - ✅ **Intent classification** — TF-IDF + Logistic Regression baseline over a 12-class taxonomy, with validation-tuned thresholds, optional probability calibration, and abstention for unclear requests
 - ✅ **Intent confirmation flow** — when the classifier is not confident, the Task Automation page shows the ranked candidate intents with their scores and the user chooses one. The choice is planned with `source="explicit"`, so the plan records that the intent came from the user. A confident destructive classification cannot be redirected, and the guard is enforced by the server rather than by the interface.
-- ✅ **Document-scoped retrieval** — a document selected in the interface is sent with the plan request, and the planner puts it on every task that names a document capability. The plan records which document it is about, and the extraction and the summary are restricted to it, so a request about one document cannot read another.
+- ✅ **Document-scoped retrieval** — the documents selected in the interface are sent with the plan request, and the planner puts them on every task that names a document capability. The plan records which documents it is about, and the extraction and the summary are restricted to them, so a request about one document cannot read another. A request may explicitly span several documents; each is then summarised under its own heading, and the documents are never blended into one narrative. A plan is bound to the request and the documents it was built from, so a plan that has gone stale is not executed.
 - ✅ **Structured summarisation** — the summary is organised into an overview, the decisions and the action items, taken from the document's own sections. Owners and due dates are read from the table that states them and are never inferred. A local Ollama model may write the summary when one is configured and answering; the result always records which method produced it, so extraction is never presented as generation.
 - ✅ **Structured planner** — typed plan schema, deterministic task decomposition per intent, NetworkX dependency graph with cycle detection and topological ordering, structural validation, missing-information and unsupported-operation detection, and approval flags for state-changing tasks
 - ✅ **Document intelligence** — PDF/DOCX/TXT/Markdown ingestion, normalisation and chunking with stable ids, local embedding, a numpy-backed local vector index, retrieval with source references, and grounded question answering and summarisation with an explicit insufficient-evidence response
 - ✅ **Controlled execution** — explicit tool registry with Pydantic input/output schemas, dependency-ordered execution, approval enforced by the executor and bound to the task's inputs, bounded retries, and a filesystem access policy that confines reads to configured roots
 - ✅ **Reminder capability** — create, list and cancel, registered as ordinary capabilities. The due time is parsed rather than guessed, and an ambiguous time is reported with both readings. `reminder.create` and `reminder.cancel` require explicit approval; `reminder.list` does not. An in-process scheduler delivers due reminders **only while NexusAI is running**; a reminder that comes due while it is not running is recorded as **missed** and reported, never as delivered. No operating-system job is registered and no external command is run.
 - ✅ **Streamlit review interface** — seven live pages driving the backend over HTTP: task workspace (classify, confirm, plan, approve, execute), reminders, document intelligence (upload, ingest, retrieve, answer, summarise), data intelligence (CSV profiling and aggregation), run history, and system status
-- ✅ 632 passing tests (unit, integration, e2e, UI smoke), 2 skipped
+- ✅ 647 passing tests (unit, integration, e2e, UI smoke), 2 skipped
 - ✅ 18 evaluation scenarios with full ground-truth validation (exceeds 15 minimum)
 - ✅ Clean Ruff linting
 
