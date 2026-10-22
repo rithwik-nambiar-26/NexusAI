@@ -137,6 +137,7 @@ def create_plan_endpoint(
         source=source,
         classifier_intent=classifier_intent,
         classifier_status=classifier_status,
+        source_document=payload.source_document,
     )
 
     return PlanResponse(

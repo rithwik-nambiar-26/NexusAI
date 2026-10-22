@@ -150,6 +150,17 @@ class LlmSummariseOutput(BaseModel):
     summary_text: str = ""
     citations: list[str] = Field(default_factory=list)
     evidence: list[SummaryEvidence] = Field(default_factory=list)
+    method: str = Field(
+        default="extractive",
+        description=(
+            "How the summary was produced: 'llm' when a local model wrote "
+            "it, 'extractive' when the text was selected from the source."
+        ),
+    )
+    sections: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="The structured sections of the summary, when it is structured",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -263,8 +274,12 @@ def register_document_tools(
         ToolDefinition(
             capability="llm.summarise",
             description=(
-                "Produce a summary assembled from the source text, with "
-                "citations to the passages used."
+                "Produce a summary of a document or of the passages most "
+                "relevant to a question, with citations to the source. A "
+                "local language model writes the summary when one is "
+                "configured and answering; otherwise the summary is "
+                "extracted from the source text. The output records which "
+                "method was used."
             ),
             input_schema=LlmSummariseInput,
             output_schema=LlmSummariseOutput,

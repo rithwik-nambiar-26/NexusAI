@@ -214,6 +214,14 @@ class Plan(BaseModel):
     source: str = Field(
         default="classifier", description="Source of intent: 'classifier' or 'explicit'"
     )
+    source_document: str | None = Field(
+        default=None,
+        description=(
+            "The document the request is about, when the user selected one. "
+            "It is carried into the plan so every document capability acts "
+            "on that document rather than on the whole corpus."
+        ),
+    )
 
     def add_task(self, task: Task) -> None:
         """Add a task to the plan."""

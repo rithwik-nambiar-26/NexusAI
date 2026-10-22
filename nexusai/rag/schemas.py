@@ -170,6 +170,18 @@ class Summary(BaseModel):
     citations: list[str] = Field(default_factory=list, description="Citation strings for the evidence")
     status: AnswerStatus = Field(default=AnswerStatus.ERROR, description="Outcome of the summary attempt")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Summary time")
+    method: str = Field(
+        default="extractive",
+        description=(
+            "How the summary was produced: 'llm' when a local model wrote "
+            "it, 'extractive' when the sentences were selected from the "
+            "source. Never claims generation when it did not happen."
+        ),
+    )
+    sections: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="The structured sections of the summary, when it is structured",
+    )
 
     def is_grounded(self) -> bool:
         """Return True when the summary is backed by evidence."""

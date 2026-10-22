@@ -30,6 +30,13 @@ class PlanRequest(BaseModel):
         le=1.0,
         description="Confidence of the intent classification",
     )
+    source_document: str | None = Field(
+        default=None,
+        description=(
+            "The document the request is about, when the user selected one. "
+            "Every document capability in the plan is restricted to it."
+        ),
+    )
 
 
 class PlanResponse(BaseModel):

@@ -171,7 +171,10 @@ def render() -> None:
             result.get("status"),
         )
 
-    if result.get("clarification_question"):
+    # The classifier's own request for clarification is only shown while
+    # it is still outstanding. Once the user has confirmed the intent, the
+    # question has been answered and repeating it would be misleading.
+    if result.get("clarification_question") and not (override or confirmed):
         st.warning(f"**Clarification needed** {result['clarification_question']}")
     if result.get("abstention_reason"):
         st.info(f"**Note** {result['abstention_reason']}")
@@ -264,26 +267,17 @@ def render() -> None:
                         if plan_source == "explicit"
                         else result.get("confidence")
                     ),
+                    # The selected document is sent with the request, so
+                    # the planner puts it on every document task. It is
+                    # not patched onto the plan afterwards, which would
+                    # leave the plan's own record of the source
+                    # inconsistent with what actually runs.
+                    source_document=selected_document,
                 )
             except api_client.ApiError as error:
                 show_api_error(error)
                 return
         plan = plan_response.get("plan") or {}
-
-        # Attach the chosen document to the first document-reading task, so
-        # the executor knows which file to read rather than guessing.
-        if selected_document:
-            for task in plan.get("tasks") or []:
-                if "document.read" in (task.get("required_capabilities") or []):
-                    task.setdefault("input_parameters", []).append(
-                        {
-                            "name": "document_id",
-                            "value": selected_document,
-                            "description": "Document chosen in the UI",
-                            "required": True,
-                        }
-                    )
-                    break
 
         st.session_state["task_plan"] = plan
         # A new plan invalidates any approval granted for the old one.

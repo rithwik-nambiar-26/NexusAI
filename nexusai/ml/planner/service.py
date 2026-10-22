@@ -40,6 +40,13 @@ _REMINDER_LIST_WORDS = (
     "upcoming",
 )
 
+#: The capabilities that read a document. A task naming one of these
+#: carries the document the user selected, so retrieval is restricted to
+#: that document.
+_DOCUMENT_CAPABILITIES = frozenset(
+    {"document.read", "document.extract", "llm.summarise"}
+)
+
 
 def _strip_file_references(text: str) -> str:
     """Remove file and path references from *text*.
@@ -397,6 +404,7 @@ class PlannerService:
         source: str = "classifier",
         classifier_intent: str | None = None,
         classifier_status: str | None = None,
+        source_document: str | None = None,
     ) -> tuple[Plan, list[str]]:
         """Create a structured plan and report any warnings.
 
@@ -414,6 +422,10 @@ class PlannerService:
                 separately from ``intent_status`` because an explicitly
                 chosen intent is always treated as confident, while the
                 classifier's original verdict is not.
+            source_document: The document the request is about, when the
+                user selected one. It is carried into the plan and given
+                to every document capability, so a request about one
+                document never reads another.
 
         Returns:
             A tuple of the plan and a list of warnings.
@@ -472,6 +484,7 @@ class PlannerService:
             intent=intent_enum,
             entities=entities or {},
             source=source,
+            source_document=source_document,
         )
 
         if destructive_note:
@@ -700,6 +713,7 @@ class PlannerService:
         intent: IntentCategory,
         entities: dict[str, Any],
         source: str,
+        source_document: str | None = None,
     ) -> Plan:
         """Build a plan from the template registered for *intent*."""
         template = self._task_templates.get(intent.value, [])
@@ -712,6 +726,7 @@ class PlannerService:
             intent=intent.value,
             plan_status=PlanStatus.DRAFT,
             source=source,
+            source_document=source_document,
         )
 
         for entry in template:
@@ -745,6 +760,9 @@ class PlannerService:
                 )
             )
 
+        if source_document:
+            self._apply_source_document(plan, source_document)
+
         self._apply_safety_rules(plan)
         self._detect_missing_information(plan, request, intent)
         self._detect_unsupported_operations(plan, request)
@@ -774,6 +792,32 @@ class PlannerService:
         if any(word in lowered for word in _REMINDER_LIST_WORDS):
             return [by_type[TaskType.REMINDER_LIST]]
         return [by_type[TaskType.REMINDER_CREATE]]
+
+    def _apply_source_document(self, plan: Plan, source_document: str) -> None:
+        """Give every document capability the document the user selected.
+
+        A request about one document must not read another. The selected
+        document is attached to each task that names a document
+        capability, so the executor passes it to the capability and the
+        capability restricts its retrieval to that document.
+
+        The ``document.read`` task also needs the path, because that is
+        how a document is located; the id is what the other capabilities
+        filter on.
+        """
+        for task in plan.tasks:
+            capabilities = set(task.required_capabilities)
+            if not capabilities & _DOCUMENT_CAPABILITIES:
+                continue
+
+            task.input_parameters.append(
+                TaskParameter(
+                    name="document_id",
+                    value=source_document,
+                    description="The document the user selected for this request",
+                    required=False,
+                )
+            )
 
     def _apply_safety_rules(self, plan: Plan) -> None:
         """Flag tasks that require approval before they may be executed."""
@@ -811,8 +855,13 @@ class PlannerService:
         topic_markers = ("research", "compare", "find", "look up", "best", " vs ")
         recipient_markers = ("@", "email", "phone", "recipient", "team", "client")
 
-        if intent in document_intents and not any(
-            marker in lowered for marker in document_markers
+        # A document the user selected in the interface is a source
+        # document, even though the request text does not name a file. The
+        # plan carries it, so nothing is missing.
+        if (
+            intent in document_intents
+            and not any(marker in lowered for marker in document_markers)
+            and not plan.source_document
         ):
             plan.missing_information.append(
                 "No source document was referenced; the plan needs a document path."
@@ -929,6 +978,7 @@ def create_plan(
     source: str = "classifier",
     classifier_intent: str | None = None,
     classifier_status: str | None = None,
+    source_document: str | None = None,
 ) -> tuple[Plan, list[str]]:
     """Create a plan using the shared planner service.
 
@@ -944,4 +994,5 @@ def create_plan(
         source=source,
         classifier_intent=classifier_intent,
         classifier_status=classifier_status,
+        source_document=source_document,
     )

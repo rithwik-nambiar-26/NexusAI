@@ -214,8 +214,15 @@ def show_plan(plan: dict[str, Any]) -> None:
             "plan_status": plan.get("plan_status"),
             "requires_approval": plan.get("requires_approval"),
             "source": plan.get("source"),
+            "source_document": plan.get("source_document"),
         }
     )
+
+    # The document the plan is about is shown in full, because it decides
+    # which document the capabilities will read.
+    source_document = plan.get("source_document")
+    if source_document:
+        st.info(f"**Source document:** `{source_document}`")
 
     tasks = plan.get("tasks") or []
     if not tasks:
@@ -261,6 +268,59 @@ def show_plan(plan: dict[str, Any]) -> None:
         st.warning(f"**Clarification required** {question or ''}")
 
 
+def show_summary(output: dict[str, Any]) -> None:
+    """Show a summary in readable sections, with its evidence.
+
+    The raw JSON is still available under an expander, but the summary
+    itself is presented as the overview, decisions and action items it
+    actually contains, so a reader does not have to read the JSON to see
+    what was found.
+    """
+    method = output.get("method")
+    if method == "llm":
+        st.caption("Written by the configured local language model.")
+    elif method == "extractive":
+        st.caption(
+            "Extracted from the source text: every statement below is taken "
+            "from the document, with its source reference."
+        )
+    elif method == "none":
+        st.caption("No summary was produced.")
+
+    sections = output.get("sections") or []
+    if sections:
+        for section in sections:
+            items = section.get("items") or []
+            if not items:
+                continue
+            st.markdown(f"**{section.get('title') or section.get('name')}**")
+            for item in items:
+                text = item.get("text") or ""
+                suffix = []
+                if item.get("owner"):
+                    suffix.append(f"owner: {item['owner']}")
+                if item.get("due"):
+                    suffix.append(f"due: {item['due']}")
+                reference = item.get("source_reference")
+                note = f" *({', '.join(suffix)})*" if suffix else ""
+                citation = f" — `{reference}`" if reference else ""
+                st.write(f"- {text}{note}{citation}")
+    else:
+        summary_text = output.get("summary_text") or ""
+        if summary_text:
+            st.markdown(summary_text)
+
+    evidence = output.get("evidence") or []
+    if evidence:
+        with st.expander(f"Evidence ({len(evidence)} passages)"):
+            for span in evidence:
+                st.write(f"**{span.get('source_reference')}**")
+                st.write(span.get("text") or "")
+
+    with st.expander("Raw output"):
+        st.json(output)
+
+
 def show_execution_report(report: dict[str, Any]) -> None:
     """Show an execution report: status, per-task results and approval state."""
     st.markdown("**Execution**")
@@ -300,7 +360,24 @@ def show_execution_report(report: dict[str, Any]) -> None:
                 st.error(f"{result.get('error_category')}: {result['error']}")
             output = result.get("output")
             if output:
-                st.json(output)
+                # A summary is shown as the readable sections it contains,
+                # rather than only as raw JSON.
+                if result.get("capability") == "llm.summarise":
+                    show_summary(output)
+                else:
+                    st.json(output)
+
+    # A summary is shown in full outside the task expander, because it is
+    # the answer the user asked for.
+    for result in results:
+        if result.get("capability") != "llm.summarise":
+            continue
+        output = result.get("output")
+        if not output:
+            continue
+        st.divider()
+        st.markdown("**Summary**")
+        show_summary(output)
 
 
 def show_evidence(evidence: list[dict[str, Any]]) -> None:

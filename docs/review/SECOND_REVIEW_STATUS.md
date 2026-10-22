@@ -1,7 +1,7 @@
 # NexusAI — Second Review Status
 
 **Review:** MSc Data Science Second Review, 23–25 October 2026  
-**Status as at:** 2026-10-22, commit `0caad0f` (Days 1-5, the Day 5.5 interface, the intent-confirmation flow and the reminder capability)  
+**Status as at:** 2026-10-22, after `0caad0f` (Days 1-5, the Day 5.5 interface, the intent-confirmation flow, the reminder capability, and the document-selection and summarisation fixes)  
 **Prepared by:** the implementation agent, from the actual repository state
 
 ## 1. Executive Summary
@@ -53,6 +53,8 @@ exercised manually through the Streamlit interface.
 | CSV profiling and aggregation | `nexusai/app/execution/csv_tool.py` | ✅ | ✅ |
 | Reminder create/list/cancel | `nexusai/app/execution/reminder_tool.py` | ✅ | ✅ |
 | Reminder scheduler | `nexusai/app/services/reminder_scheduler.py` | ✅ | ✅ |
+| Structured summarisation | `nexusai/rag/summarisation.py` — overview, decisions, action items, extracted from the source; the method is recorded on the result | ✅ | ✅ |
+| Optional local LLM | `nexusai/app/services/llm.py` — Ollama, used only when configured and answering; the extractive method is used otherwise | ✅ | ✅ |
 | Streamlit demonstration interface (7 pages) | `nexusai/app/ui/` | ✅ | ✅ |
 
 **Test count:** 595 passing, 2 skipped (the symlink tests skip where the

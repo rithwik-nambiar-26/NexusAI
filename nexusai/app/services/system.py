@@ -54,11 +54,9 @@ def get_service_status(settings: Settings, engine: Engine | None) -> dict[str, A
     """Probe every optional service and return an honest status map."""
     timeout = float(settings.service_probe_timeout_seconds)
 
-    # Optional service URLs are intentionally not fields on Settings today.
-    # They are scheduled for Day 6-7 (local LLM / vector-store integration).
-    # Absent configuration => not configured => reported as unavailable,
-    # never assumed available.
-    ollama_url = None
+    # The optional local LLM. Absent configuration means "not configured",
+    # and it is reported as unavailable rather than assumed to be present.
+    ollama_url = getattr(settings, "ollama_base_url", None)
     chromadb_url = None
 
     ollama = _probe_http(ollama_url, timeout) if ollama_url else False
@@ -73,6 +71,7 @@ def get_service_status(settings: Settings, engine: Engine | None) -> dict[str, A
             "available": ollama,
             "configured": ollama_url is not None,
             "url": ollama_url,
+            "model": getattr(settings, "ollama_model", None),
         },
         "chromadb": {
             "available": chromadb,

@@ -203,16 +203,24 @@ def test_summarize_document(service):
 
 
 def test_summarize_unknown_document(service):
-    """Test summarising a document that is not indexed."""
+    """Test summarising a document that is not indexed.
+
+    The result is an explicit refusal that says what is wrong, rather
+    than an empty string, so the interface can show it.
+    """
     summary = service.summarize(document_id="doc_does_not_exist")
     assert summary.status == AnswerStatus.INSUFFICIENT_EVIDENCE
-    assert summary.summary_text == ""
+    assert summary.summary_text
+    assert "not indexed" in summary.summary_text
+    # Nothing was produced, so no method is claimed.
+    assert summary.method == "none"
 
 
 def test_summarize_with_no_documents(service):
     """Test summarising an empty index."""
     summary = service.summarize()
     assert summary.status == AnswerStatus.NO_DOCUMENTS
+    assert summary.summary_text
 
 
 def test_summarize_grounded_in_source_text(service):

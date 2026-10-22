@@ -44,6 +44,7 @@ from nexusai.rag.schemas import (
     AnswerStatus,
     Document,
     DocumentFormat,
+    DocumentSection,
     EvidenceSpan,
     ExtractionStatus,
     IngestionResult,
@@ -51,6 +52,7 @@ from nexusai.rag.schemas import (
     Summary,
 )
 from nexusai.rag.store import VectorStore
+from nexusai.rag.summarisation import build_structured_summary, to_dict
 
 logger = get_logger("rag.service")
 
@@ -114,6 +116,7 @@ class DocumentIntelligenceService:
         min_evidence_score: float = DEFAULT_MIN_EVIDENCE_SCORE,
         relative_evidence_ratio: float = DEFAULT_RELATIVE_EVIDENCE_RATIO,
         path_policy: PathPolicy | None = None,
+        llm_client=None,
     ) -> None:
         self.store_dir = Path(store_dir)
         self.embedder = embedder or HashingEmbedder()
@@ -121,6 +124,9 @@ class DocumentIntelligenceService:
         self.chunk_overlap = chunk_overlap
         self.min_evidence_score = min_evidence_score
         self.relative_evidence_ratio = relative_evidence_ratio
+        # The optional local LLM. When it is None, or when it is not
+        # answering, summarisation uses the extractive method.
+        self.llm_client = llm_client
         # When a policy is supplied, only paths inside its allowed roots
         # may be read. With no policy the service is unrestricted, which is
         # only appropriate for a local, single-user tool.
@@ -610,15 +616,32 @@ class DocumentIntelligenceService:
     ) -> Summary:
         """Summarise a document, or the passages most relevant to a question.
 
-        The summary is extractive: it selects representative sentences from
-        the source text and cites them. It does not generate new prose, so
-        every sentence in the summary can be checked against the source.
+        Two methods are possible and the result always says which was
+        used.
+
+        When a local LLM is configured and answering, it writes the
+        summary and the method is ``"llm"``. The model is given only the
+        retrieved evidence and is told not to add anything that is not in
+        it.
+
+        Otherwise the summary is *extractive*: sentences are selected from
+        the source text and organised into an overview, the decisions and
+        the action items. Nothing is generated, so every statement can be
+        checked against the source, and the method is ``"extractive"``.
+
+        A summary is never produced from no evidence: the result is an
+        explicit insufficient-evidence response.
         """
         if document_id is not None:
             if not self.store.has_document(document_id):
                 return Summary(
                     source_document_id=document_id,
                     status=AnswerStatus.INSUFFICIENT_EVIDENCE,
+                    method="none",
+                    summary_text=(
+                        "That document is not indexed, so there is nothing to "
+                        "summarise."
+                    ),
                 )
             document_ids = {document_id}
         else:
@@ -638,6 +661,11 @@ class DocumentIntelligenceService:
             return Summary(
                 source_document_id=document_id,
                 status=AnswerStatus.NO_DOCUMENTS,
+                method="none",
+                summary_text=(
+                    "No document was found that matches the request, so there "
+                    "is nothing to summarise."
+                ),
             )
 
         evidence = self._select_evidence(
@@ -663,14 +691,159 @@ class DocumentIntelligenceService:
             return Summary(
                 source_document_id=document_id,
                 status=AnswerStatus.INSUFFICIENT_EVIDENCE,
+                method="none",
+                summary_text=(
+                    "The retrieved passages did not contain anything that "
+                    "could be summarised."
+                ),
+            )
+
+        # A local LLM is used when one is configured and answering. The
+        # result records which method produced the summary.
+        llm_summary = self._summarize_with_llm(evidence, question)
+        if llm_summary is not None:
+            return llm_summary
+
+        structured = build_structured_summary(
+            evidence,
+            question=question,
+            sections=self._sections_for(document_id),
+        )
+        if not structured.sufficient:
+            return Summary(
+                source_document_id=document_id,
+                status=AnswerStatus.INSUFFICIENT_EVIDENCE,
+                method="extractive",
+                summary_text=structured.reason
+                or "The evidence did not support a summary.",
+                evidence=evidence,
+                citations=list(dict.fromkeys(span.source_reference for span in evidence)),
             )
 
         return Summary(
             source_document_id=document_id,
-            summary_text=" ".join(span.text for span in evidence),
+            summary_text=structured.to_text(),
+            evidence=evidence,
+            citations=structured.citations,
+            status=AnswerStatus.ANSWERED,
+            method="extractive",
+            sections=to_dict(structured)["sections"],
+        )
+
+    def _sections_for(self, document_id: str | None) -> list[DocumentSection] | None:
+        """Return a document's own sections, when one document is in scope.
+
+        A document's sections are the natural unit for a structured
+        summary: a heading such as "Action items" says what the text under
+        it is, which a chunk boundary does not. When several documents are
+        in scope there is no single structure to follow, so None is
+        returned and the summary is built from the retrieved passages.
+        """
+        if document_id is None:
+            return None
+        document = self._documents.get(document_id)
+        if document is None:
+            return None
+        return list(document.sections)
+
+    def _summarize_with_llm(
+        self,
+        evidence: list[EvidenceSpan],
+        question: str | None,
+    ) -> Summary | None:
+        """Summarise with the local LLM, if there is one that is working.
+
+        Returns None when there is no usable LLM, so the caller falls
+        back to the extractive method. A failure is never presented as a
+        summary.
+        """
+        if self.llm_client is None:
+            return None
+
+        try:
+            if not self.llm_client.is_available():
+                return None
+            generated = self.llm_client.summarise(
+                [
+                    {
+                        "text": span.text,
+                        "source_reference": span.source_reference,
+                    }
+                    for span in evidence
+                ],
+                instruction=question or "",
+            )
+        except Exception:
+            logger.warning(
+                "The local LLM could not produce a summary; the extractive "
+                "method was used instead",
+                exc_info=True,
+            )
+            return None
+
+        if not generated.sufficient:
+            return Summary(
+                status=AnswerStatus.INSUFFICIENT_EVIDENCE,
+                method="llm",
+                summary_text=(
+                    "The local model reported that the retrieved evidence did "
+                    "not support a summary."
+                ),
+                evidence=evidence,
+                citations=list(dict.fromkeys(span.source_reference for span in evidence)),
+            )
+
+        sections: list[dict[str, Any]] = []
+        if generated.overview:
+            sections.append(
+                {
+                    "name": "overview",
+                    "title": "Overview",
+                    "items": [
+                        {
+                            "text": generated.overview,
+                            "source_reference": "local model",
+                            "owner": None,
+                            "due": None,
+                        }
+                    ],
+                }
+            )
+        for name, title, values in (
+            ("decisions", "Decisions", generated.decisions),
+            ("action_items", "Action items", generated.action_items),
+        ):
+            if values:
+                sections.append(
+                    {
+                        "name": name,
+                        "title": title,
+                        "items": [
+                            {
+                                "text": value,
+                                "source_reference": "local model",
+                                "owner": None,
+                                "due": None,
+                            }
+                            for value in values
+                        ],
+                    }
+                )
+
+        text_parts: list[str] = []
+        for section in sections:
+            text_parts.append(f"{section['title']}:")
+            for item in section["items"]:
+                text_parts.append(f"- {item['text']}")
+            text_parts.append("")
+
+        return Summary(
+            summary_text="\n".join(text_parts).strip(),
             evidence=evidence,
             citations=list(dict.fromkeys(span.source_reference for span in evidence)),
             status=AnswerStatus.ANSWERED,
+            method="llm",
+            sections=sections,
         )
 
     def _representative_chunks(

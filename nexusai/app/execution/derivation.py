@@ -67,7 +67,13 @@ def derive_tool_inputs(
     """
     resolved = dict(declared)
 
-    if capability == "document.read" and not resolved.get("path"):
+    if capability == "document.read" and not resolved.get("path") and not resolved.get(
+        "document_id"
+    ):
+        # A document the user selected is used as it is: the request text
+        # is not consulted for a filename, because the selection is the
+        # more specific instruction and must not be overridden by a
+        # guess.
         reference = find_document_reference(request)
         if reference:
             resolved["path"] = reference

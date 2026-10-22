@@ -119,7 +119,7 @@ reason: The retrieved passages did not contain a statement that
 
 | Check | Result |
 |-------|--------|
-| `python -m pytest tests/` | **595 passed, 2 skipped** |
+| `python -m pytest tests/` | **632 passed, 2 skipped** |
 | `python -m ruff check .` | **All checks passed** |
 
 The two skips are the symlink-escape tests, which need a privilege

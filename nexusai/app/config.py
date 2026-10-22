@@ -66,6 +66,18 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:8501"])
 
+    # --- Optional local LLM (Ollama) ----------------------------------------
+    # Absent configuration means "not configured". The LLM is never
+    # assumed to be present, and no request is made unless a base URL is
+    # given. When it is absent, summarisation falls back to the extractive
+    # method, and says so.
+    ollama_base_url: str | None = None
+    ollama_model: str | None = None
+    ollama_timeout_seconds: float = 30.0
+    #: Whether the local LLM may be used for summarisation at all. Turning
+    #: this off forces the extractive path even when Ollama is running.
+    llm_enabled: bool = True
+
     # --- Logging -----------------------------------------------------------
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"

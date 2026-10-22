@@ -160,6 +160,8 @@ class DocumentCapabilities:
             "status": summary.status.value,
             "summary_text": summary.summary_text,
             "citations": summary.citations,
+            "method": summary.method,
+            "sections": summary.sections,
             "evidence": [
                 {
                     "chunk_id": span.chunk_id,

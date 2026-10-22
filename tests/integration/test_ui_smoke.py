@@ -522,3 +522,111 @@ def test_reminders_page_lists_stored_reminders(app_test, monkeypatch):
     assert "Team standup" in body
     assert "pending" in body
     assert "2026-10-23T09:00:00+05:30" in body
+
+
+# ---------------------------------------------------------------------------
+# The summary, the source document and the stale clarification warning
+# ---------------------------------------------------------------------------
+
+
+def test_a_confirmed_intent_clears_the_stale_clarification_warning(
+    app_test, monkeypatch
+):
+    """The clarification question must not persist after the user answers it."""
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.24,
+            "status": "clarification_required",
+            "clarification_question": "I'm not sure I understand.",
+            "all_scores": {
+                "document_summarisation": 0.24,
+                "document_transformation": 0.16,
+            },
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(api_client, "list_documents", lambda *a, **k: {"documents": []})
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise the uploaded meeting notes.").run()
+
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    # Before the confirmation, the question is still outstanding.
+    assert "I'm not sure I understand." in _body(at)
+
+    _intent_radio(at).set_value("document summarisation (0.240)").run()
+    confirm_button = next(b for b in at.button if b.label == "Confirm this intent")
+    at = confirm_button.click().run()
+
+    # After the confirmation, it has been answered and is not repeated.
+    body = _body(at)
+    assert "Intent confirmed by you" in body
+    assert "I'm not sure I understand." not in body
+
+
+def test_the_plan_shows_the_selected_document(app_test, monkeypatch):
+    """The plan must show which document it is about."""
+    from nexusai.app.ui import api_client
+
+    classification = {
+        "result": {
+            "predicted_intent": "document_summarisation",
+            "confidence": 0.9,
+            "status": "confident",
+            "all_scores": {"document_summarisation": 0.9},
+        }
+    }
+    monkeypatch.setattr(
+        api_client, "classify_intent", lambda *a, **k: classification
+    )
+    monkeypatch.setattr(
+        api_client,
+        "list_documents",
+        lambda *a, **k: {
+            "documents": [
+                {"name": "meeting_notes.md", "document_id": "doc_meeting"},
+            ]
+        },
+    )
+
+    plan = {
+        "plan_id": "plan_1",
+        "intent": "document_summarisation",
+        "plan_status": "ready",
+        "requires_approval": False,
+        "source": "explicit",
+        "source_document": "doc_meeting",
+        "tasks": [],
+        "dependencies": [],
+        "execution_order": [],
+        "parallel_levels": [],
+        "missing_information": [],
+        "unsupported_operations": [],
+        "validation_errors": [],
+        "clarification_required": False,
+        "clarification_question": None,
+    }
+    monkeypatch.setattr(
+        api_client, "create_plan", lambda *a, **k: {"plan": plan}
+    )
+
+    at = app_test.run()
+    at.radio[0].set_value("Task Automation").run()
+    at.text_area[0].set_value("Summarise the meeting notes.").run()
+    classify_button = next(b for b in at.button if b.label == "Classify and plan")
+    at = classify_button.click().run()
+
+    generate_button = next(b for b in at.button if b.label == "Generate plan")
+    at = generate_button.click().run()
+
+    body = _body(at)
+    assert "Source document" in body
+    assert "doc_meeting" in body

@@ -115,6 +115,12 @@ are reported as **skipped**.
 detecting it. The evidence is cited and checkable by a human, but the
 system does not check it. This is Day 6.
 
+The verification task is reported as **skipped**, never as completed, and
+a test asserts that it is. `docs/architecture/verification_design.md`
+records what registering `verify.content` and `verify.calculation` would
+take, what the executor would report, and how the verifier is itself
+evaluated.
+
 ### 2.2 Adaptive replanning is not implemented
 
 A failed task blocks its dependents and the run ends. Nothing revises
@@ -223,14 +229,29 @@ they are all read-only.
 retried before giving up. Harmless for the current tool set, but worth
 noting for future write-capable tools.
 
-### 2.10 Answers are extractive, not generative
+### 2.10 Answers are extractive by default; the summary is structured
 
-Answers and summaries are assembled from sentences in the source text.
-No new prose is generated.
+Answers are always assembled from sentences in the source text. No new
+prose is generated.
 
-**Consequence:** every claim is checkable, but the output is less fluent
-than a generated answer. A generative backend could be added behind the
-same service interface; none exists.
+Summaries are structured into an overview, the decisions and the action
+items. The sections come from the document's own headings, and the items
+are copied from the source. An action item's owner and due date are read
+from the table that states them and are never inferred; a sentence that
+does not record a decision is not reported as one.
+
+A local language model may be used for the summary when one is
+configured (`NEXUSAI_OLLAMA_BASE_URL` and `NEXUSAI_OLLAMA_MODEL`) and is
+answering. The model is given only the retrieved evidence and is told not
+to add anything that is not in it. The result always records which method
+produced it — `method: "llm"` or `method: "extractive"` — so extraction
+is never presented as generation.
+
+**Consequence:** with no local model configured, every claim in a summary
+is checkable against the source, but the wording is the document's own
+rather than fluent prose. With one configured, the summary reads better
+and is no longer guaranteed to be verbatim; it is still grounded in the
+supplied evidence and still carries its source references.
 
 ### 2.11 Retrieval is lexical by default
 
@@ -351,6 +372,19 @@ agreed at project level.
 | 6 | The classifier is weak on three classes, one of which is a refusal path | Medium | The weak classes are refusal paths, where the current behaviour is safest. The confirmation flow makes the user the decision-maker when the classifier is unsure. |
 | 7 | A reminder is delivered only while NexusAI is running | Medium | Stated in the interface, in the API responses and in §2.4. Missed reminders are reported as missed, never as delivered. |
 | 8 | The dataset is small and synthetic | Medium | Stated throughout the evaluation documentation; the metrics are reported with their support counts. |
+
+### 2.14 A request about one document reads only that document
+
+When the user selects a document in the interface, the selection is sent
+with the plan request and the planner puts it on every task that names a
+document capability. The executor passes it to the capability, and the
+capability restricts its retrieval to that document. The plan records
+which document it is about, so the plan's own record agrees with what
+ran.
+
+**Consequence:** a request about one document cannot retrieve passages
+from another. A request that names no document has no such restriction,
+and the plan reports the missing document rather than choosing one.
 
 ---
 

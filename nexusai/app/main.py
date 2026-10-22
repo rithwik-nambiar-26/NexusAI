@@ -34,6 +34,7 @@ from nexusai.app.execution.registry import ToolRegistry
 from nexusai.app.execution.reminder_tool import register_reminder_tools
 from nexusai.app.execution.tools import register_document_tools
 from nexusai.app.security.paths import PathPolicy
+from nexusai.app.services.llm import get_llm_client
 from nexusai.app.services.reminder import ReminderService
 from nexusai.app.services.reminder_scheduler import ReminderScheduler
 from nexusai.rag.capabilities import DocumentCapabilities
@@ -92,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         document_service = DocumentIntelligenceService(
             store_dir=store_dir,
             path_policy=path_policy,
+            llm_client=get_llm_client(settings),
         )
     except Exception:
         logging.getLogger("nexusai.app.main").exception(
